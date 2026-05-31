@@ -80,7 +80,9 @@ interface IAudioSessionManager2 {
 [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IMMDevice {
   int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.Interface)] out object ppInterface);
+  int OpenPropertyStore(int stgmAccess, [MarshalAs(UnmanagedType.Interface)] out object ppProperties);
   int GetId([MarshalAs(UnmanagedType.LPWStr)] out string ppstrId);
+  int GetState(out int pdwState);
 }
 
 [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -152,24 +154,32 @@ public static class Audio {
     float sum = 0f;
     int n = 0;
     foreach (var d in devices) {
-      float level;
-      bool muted;
-      var epv = GetEndpointVolume(d);
-      Marshal.ThrowExceptionForHR(epv.GetMute(out muted));
-      Marshal.ThrowExceptionForHR(epv.GetMasterVolumeLevelScalar(out level));
-      if (muted) level = 0f;
-      sum += level;
-      n++;
+      try {
+        float level;
+        bool muted;
+        var epv = GetEndpointVolume(d);
+        Marshal.ThrowExceptionForHR(epv.GetMute(out muted));
+        Marshal.ThrowExceptionForHR(epv.GetMasterVolumeLevelScalar(out level));
+        if (muted) level = 0f;
+        sum += level;
+        n++;
+      } catch {
+        // Skip unsupported/invalid endpoints.
+      }
     }
     return n > 0 ? (sum / n) : 0.5f;
   }
 
   static void SetVolumeOnDevices(List<IMMDevice> devices, float level) {
     foreach (var d in devices) {
-      var epv = GetEndpointVolume(d);
-      Marshal.ThrowExceptionForHR(epv.SetMute(level <= 0f, Guid.Empty));
-      Marshal.ThrowExceptionForHR(epv.SetMasterVolumeLevelScalar(level, Guid.Empty));
-      SetSessionVolumesOnDevice(d, level);
+      try {
+        var epv = GetEndpointVolume(d);
+        Marshal.ThrowExceptionForHR(epv.SetMute(level <= 0f, Guid.Empty));
+        Marshal.ThrowExceptionForHR(epv.SetMasterVolumeLevelScalar(level, Guid.Empty));
+        SetSessionVolumesOnDevice(d, level);
+      } catch {
+        // Skip unsupported/invalid endpoints.
+      }
     }
   }
 
