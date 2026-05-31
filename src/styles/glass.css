@@ -1,0 +1,209 @@
+/* ============================================================
+   glass.css — Glass metadata overlay, menu button, quick menu,
+               and all lid-view overrides
+   ============================================================ */
+
+/* ── Glass metadata text (lid view overlay) ── */
+
+#glassMeta {
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  max-width: min(72%, 260px);
+  display: grid;
+  gap: 2px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.96) translateY(-6px);
+  z-index: 22;
+  transition: opacity 260ms ease, transform 360ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+#glassTitle {
+  color: rgba(34, 60, 95, 0.95);
+  font: 700 13px/1.2 "Segoe UI", sans-serif;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+#glassArtist {
+  color: rgba(46, 74, 108, 0.9);
+  font: 600 11px/1.25 "Segoe UI", sans-serif;
+  letter-spacing: 0.15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+#glassAlbum {
+  color: rgba(58, 88, 122, 0.88);
+  font: 600 10px/1.2 "Segoe UI", sans-serif;
+  letter-spacing: 0.14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+/* ── Glass 3-dot menu button (lid / mini-lid) ── */
+
+#glassMenuBtn {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.95);
+  transition: opacity 220ms ease, transform 260ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+#widget[data-view="lid"]:hover #glassMenuBtn,
+#widget[data-view="mini-lid"]:hover #glassMenuBtn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+/* ── Quick menu dropdown ── */
+
+#glassQuickMenu {
+  position: absolute;
+  right: 8px;
+  top: 42px;
+  min-width: 124px;
+  border-radius: 10px;
+  border: 1px solid rgba(177, 205, 234, 0.3);
+  background: linear-gradient(160deg, rgba(244, 251, 255, 0.84), rgba(183, 206, 231, 0.7));
+  box-shadow: 0 10px 18px rgba(12, 24, 41, 0.18);
+  z-index: 39;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-5px) scale(0.97);
+  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
+  padding: 4px;
+}
+
+#glassQuickMenu[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.quickItem {
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(29, 48, 72, 0.95);
+  font: 600 11px/1.2 "Segoe UI", sans-serif;
+  text-align: left;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+
+.quickItem:hover {
+  background: rgba(255, 255, 255, 0.44);
+}
+
+/* ── Lid view — widget-level overrides ── */
+
+#widget[data-view="lid"] {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 45%),
+    repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.08) 0px, rgba(255, 255, 255, 0.08) 2px, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0) 7px),
+    linear-gradient(165deg, var(--metal-1), var(--metal-2) 52%, #bfc8d7 100%);
+  box-shadow:
+    0 14px 24px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(112, 124, 142, 0.24);
+}
+
+#widget[data-view="lid"]::after {
+  opacity: 0.18;
+  /* Flash-catch then slow fade to settled opacity */
+  animation: glassReveal 3200ms linear 900ms both;
+}
+
+#widget[data-view="lid"] #glassMeta {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+  /* Springs in after the glass flash fades */
+  transition: opacity 550ms ease 2900ms, transform 750ms cubic-bezier(0.34, 1.36, 0.64, 1) 2870ms;
+}
+
+#widget[data-view="lid"] #deck {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 1fr);
+}
+
+#widget[data-view="lid"] #leftPane {
+  opacity: 0;
+  pointer-events: none;
+  /* Slide right under the album art, fade simultaneously with shelf */
+  transform: translateX(140px);
+  transition: opacity 200ms ease, transform var(--shelf-duration) var(--drawer-ease);
+}
+
+#widget[data-view="lid"] #meta,
+#widget[data-view="lid"] #controls,
+#widget[data-view="lid"] #frame {
+  opacity: 0;
+  transform: none;
+}
+
+#widget[data-view="lid"] #rightPane {
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(171, 189, 209, 0.34);
+  overflow: hidden;
+}
+
+#widget[data-view="lid"] #rightPane::after {
+  transform: translateX(0);
+  opacity: 1;
+  /* Wait for record to be inside the sleeve before lining appears */
+  transition: transform 400ms var(--drawer-ease) 900ms, opacity 400ms ease 900ms;
+}
+
+#widget[data-view="lid"] #sleeve {
+  border-left-color: rgba(204, 220, 238, 0.2);
+  background: linear-gradient(180deg, rgba(236, 244, 253, 0.06), rgba(188, 208, 230, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(216, 232, 248, 0.28), inset 0 14px 28px rgba(255, 255, 255, 0.05), inset 0 -14px 24px rgba(64, 84, 112, 0.08);
+  /* Sleeve clears after record is inside */
+  transition: background 400ms var(--drawer-ease) 900ms, box-shadow 400ms var(--drawer-ease) 900ms, border-color 400ms var(--drawer-ease) 900ms;
+}
+
+#widget[data-view="lid"] #sleeve::before {
+  opacity: 0;
+}
+
+#widget[data-view="lid"] #sleeve::after {
+  opacity: 1;
+  transform: translateY(0);
+  background:
+    radial-gradient(circle at 86% 10%, rgba(255, 255, 255, 0.34) 0 24%, rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0) 66%),
+    linear-gradient(222deg, rgba(255, 255, 255, 0.2) 8%, rgba(255, 255, 255, 0.08) 28%, rgba(255, 255, 255, 0) 56%),
+    linear-gradient(184deg, rgba(174, 204, 230, 0.14), rgba(122, 152, 184, 0.06));
+  box-shadow: inset 0 0 0 1px rgba(220, 236, 252, 0.42), inset 0 12px 22px rgba(255, 255, 255, 0.08), inset 0 -12px 20px rgba(50, 72, 98, 0.14);
+  /* Highlights drift in from above with a spring */
+  transition: opacity 650ms var(--drawer-ease) 880ms, transform 780ms cubic-bezier(0.34, 1.38, 0.64, 1) 860ms;
+}
+
+#widget[data-view="lid"] #sleeveArt {
+  opacity: 0;
+  /* Art disappears after the record is fully inserted */
+  transition: opacity 500ms var(--drawer-ease) 900ms;
+}
+
+/* Suppress all hover-triggered glass elements while the close animation is running */
+#widget[data-view="lid"][data-transitioning="true"]:hover #glassControls,
+#widget[data-view="lid"][data-transitioning="true"]:hover #glassMenuBtn,
+#widget[data-view="lid"][data-transitioning="true"]:hover #glassVolumeDock {
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}

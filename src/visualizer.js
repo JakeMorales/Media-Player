@@ -14,8 +14,8 @@ function initVisualizer(scene, audio, cfg) {
 function barVisualizer(scene, cfg) {
   const n   = cfg.barCount;
   const geo = new THREE.PlaneGeometry(1, 1);
-  const baseMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-  const sheenMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.84 });
+  const baseMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.96 });
+  const sheenMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 });
   const mesh = new THREE.InstancedMesh(geo, baseMat, n);
   const sheenMesh = new THREE.InstancedMesh(geo, sheenMat, n);
   scene.add(mesh);
@@ -35,16 +35,20 @@ function barVisualizer(scene, cfg) {
   const levels = new Float32Array(n);
   const prevRaw = new Float32Array(n);
   const barProfile = new Float32Array(n);
+  const barDrift = new Float32Array(n);
   const attack = 0.86;
   const release = 0.34;
+  let phase = 0;
 
   for (let i = 0; i < n; i++) {
     const wave = (Math.sin(i * 1.7) + 1) * 0.5;
     const alt = (i % 2 === 0) ? 0.96 : 1.04;
     barProfile[i] = (0.88 + wave * 0.24) * alt;
+    barDrift[i] = (Math.sin(i * 0.93 + 1.7) * 0.5 + 0.5) * 0.18;
   }
 
   return function update(freqData) {
+    phase += 0.016;
     let globalSum = 0;
     for (let i = 0; i < freqData.length; i++) globalSum += freqData[i];
     const globalNorm = (globalSum / freqData.length) / 255;
@@ -93,7 +97,8 @@ function barVisualizer(scene, cfg) {
       prevRaw[i] = compressed;
       const floor = globalNorm * (0.1 + t * 0.16);
       const contrastBoost = Math.min(0.16, localContrast * 0.75);
-      const target = Math.max(compressed + transient + contrastBoost, floor);
+      const synthPulse = (Math.sin(phase * (1.6 + t * 1.2) + i * 0.58) * 0.5 + 0.5) * (0.02 + barDrift[i]);
+      const target = Math.max(compressed + transient + contrastBoost + synthPulse, floor);
       const rate = target > levels[i] ? attack : release;
       levels[i] += (target - levels[i]) * rate;
 
@@ -112,10 +117,11 @@ function barVisualizer(scene, cfg) {
       sheenDummy.updateMatrix();
       sheenMesh.setMatrixAt(i, sheenDummy.matrix);
 
-      const shade = 0.16 + levels[i] * 0.24;
-      col.setRGB(shade * 0.86, shade * 0.9, shade);
-      const sheenShade = Math.min(0.72, 0.42 + levels[i] * 0.36);
-      sheenCol.setRGB(sheenShade * 0.76, sheenShade * 0.8, sheenShade * 0.88);
+      const huePulse = 0.18 + levels[i] * 0.34;
+      const silver = 0.2 + huePulse * 0.68;
+      col.setRGB(silver * (0.7 + t * 0.16), silver * (0.82 + t * 0.1), silver * (0.94 + t * 0.06));
+      const sheenShade = Math.min(0.92, 0.34 + levels[i] * 0.5 + barDrift[i] * 0.18);
+      sheenCol.setRGB(sheenShade * 0.62, sheenShade * 0.78, sheenShade);
       mesh.setColorAt(i, col);
       sheenMesh.setColorAt(i, sheenCol);
     }

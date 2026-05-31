@@ -11,6 +11,13 @@ const artistEl = document.getElementById('artist');
 const albumEl = document.getElementById('album');
 const albumTextEl = document.getElementById('albumText');
 const titleEl = document.getElementById('title');
+const miniTitleEl = document.getElementById('miniTitle');
+const miniArtistEl = document.getElementById('miniArtist');
+const miniArtEl = document.getElementById('miniArt');
+const miniArtWrapEl = document.getElementById('miniArtWrap');
+const miniSpectrumEl = document.getElementById('miniSpectrum');
+const miniProgressFillEl = document.getElementById('miniProgressFill');
+const miniPaneEl = document.getElementById('miniPane');
 const glassTitleEl = document.getElementById('glassTitle');
 const glassArtistEl = document.getElementById('glassArtist');
 const glassAlbumEl = document.getElementById('glassAlbum');
@@ -24,23 +31,64 @@ const btnNextEl = document.getElementById('btnNext');
 const btnPrevGlassEl = document.getElementById('btnPrevGlass');
 const btnPlayPauseGlassEl = document.getElementById('btnPlayPauseGlass');
 const btnNextGlassEl = document.getElementById('btnNextGlass');
+const btnPrevMiniEl = document.getElementById('btnPrevMini');
+const btnPlayPauseMiniEl = document.getElementById('btnPlayPauseMini');
+const btnNextMiniEl = document.getElementById('btnNextMini');
+const btnMiniCollapseEl = document.getElementById('btnMiniCollapse');
+const btnSettingsEl = document.getElementById('btnSettings');
+const settingsPanelEl = document.getElementById('settingsPanel');
+const themeSelectEl = document.getElementById('themeSelect');
+const scaleSliderEl = document.getElementById('scaleSlider');
+const clearGlassToggleEl = document.getElementById('clearGlassToggle');
+const launchToggleEl = document.getElementById('launchToggle');
+const miniModeToggleEl = document.getElementById('miniModeToggle');
+const btnCloseAppEl = document.getElementById('btnCloseApp');
+const glassMenuBtnEl = document.getElementById('glassMenuBtn');
+const glassQuickMenuEl = document.getElementById('glassQuickMenu');
+const quickMiniEl = document.getElementById('quickMini');
+const quickSettingsEl = document.getElementById('quickSettings');
+const resizeHandleEl = document.getElementById('resizeHandle');
+const pinBtnEl = document.getElementById('pinBtn');
 const rightPaneEl = document.getElementById('rightPane');
+const recordEl = document.getElementById('record');
 const sleeveArtEl = document.getElementById('sleeveArt');
 const recordArtEl = document.getElementById('recordArt');
+const glassSpectrumEl = document.getElementById('glassSpectrum');
 const labelTitleEl = document.getElementById('labelTitle');
 const labelArtistEl = document.getElementById('labelArtist');
 const rootStyle = document.documentElement.style;
 let dragging = false;
 let pointerDown = false;
 let compactMode = false;
+let currentView = 'full';
+let isTransitioning = false;
+let isPinned = false;
+let pinHoverTimer = null;
+const PIN_CORNER_PX = 64;
+const RESIZE_CORNER_PX = 48;
 let pendingToggleClick = false;
 let pointerDownX = 0;
 let pointerDownY = 0;
 let isHoveringWidget = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
+let settingsOpen = false;
+let quickMenuOpen = false;
+let resizing = false;
+let resizeStartX = 0;
+let resizeStartWidth = 0;
+let suppressNextWidgetToggle = false;
 const dragState = { offsetX: 0, offsetY: 0 };
 const DRAG_THRESHOLD = 6;
+const MIN_SCALE = 0.7;
+const MAX_SCALE = 1.35;
+const uiState = {
+  scale: 1,
+  baseWidth: cfg.widget.width,
+  miniMode: false,
+  theme: 'light',
+  clearGlass: true
+};
 const volumeControlState = {
   volume: 0.5,
   dragging: false,
@@ -58,7 +106,17 @@ let currentMeta = {
   album: '',
   artwork: '',
   playbackStatus: 'paused',
-  controls: { canPlay: true, canPause: true, canSkipNext: true, canSkipPrevious: true }
+  controls: { canPlay: true, canPause: true, canSkipNext: true, canSkipPrevious: true },
+  durationMs: 0,
+  positionMs: 0
+};
+
+const playbackProgressState = {
+  durationMs: 0,
+  positionMs: 0,
+  playing: false,
+  trackKey: '',
+  lastTickMs: 0
 };
 
 const SOURCE_PRESETS = {
@@ -80,8 +138,74 @@ const fallbackLabelPalettes = [
   { base: [231, 181, 66], ring: [148, 83, 38], panel: [255, 243, 214], ink: [34, 24, 13] }
 ];
 
+const spectrumState = {
+  ctx: glassSpectrumEl ? glassSpectrumEl.getContext('2d') : null,
+  width: 0,
+  height: 0,
+  dpr: 1,
+  centerX: 0,
+  centerY: 0,
+  recordRadius: 0,
+  levels: new Float32Array(64),
+  bass: 0,
+  idlePhase: 0,
+  geomStamp: ''
+};
+
+const miniSpectrumState = {
+  ctx: miniSpectrumEl ? miniSpectrumEl.getContext('2d') : null,
+  width: 0,
+  height: 0,
+  dpr: 1,
+  levels: new Float32Array(24),
+  phase: 0
+};
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampScale(value) {
+  return clamp(value, MIN_SCALE, MAX_SCALE);
+}
+
+function isLidLikeView(view = currentView) {
+  return view === 'lid' || view === 'mini-lid';
+}
+
+function applyTheme(theme) {
+  uiState.theme = theme;
+  if (widgetEl) {
+    widgetEl.dataset.theme = theme;
+  }
+}
+
+function applyGlassClarity(enabled) {
+  uiState.clearGlass = !!enabled;
+  rootStyle.setProperty('--glass-clarity', enabled ? '0.28' : '0.72');
+}
+
+function setCurrentView(view) {
+  currentView = view;
+  compactMode = isLidLikeView(view);
+  if (widgetEl) widgetEl.dataset.view = view;
+  if (miniModeToggleEl) miniModeToggleEl.checked = view === 'mini' || view === 'mini-lid';
+}
+
+function setSettingsOpen(open) {
+  settingsOpen = !!open;
+  if (settingsPanelEl) {
+    settingsPanelEl.dataset.open = settingsOpen ? 'true' : 'false';
+    settingsPanelEl.setAttribute('aria-hidden', settingsOpen ? 'false' : 'true');
+  }
+}
+
+function setQuickMenuOpen(open) {
+  quickMenuOpen = !!open;
+  if (glassQuickMenuEl) {
+    glassQuickMenuEl.dataset.open = quickMenuOpen ? 'true' : 'false';
+    glassQuickMenuEl.setAttribute('aria-hidden', quickMenuOpen ? 'false' : 'true');
+  }
 }
 
 function hashString(value) {
@@ -145,6 +269,14 @@ function setLabelTheme(theme) {
   rootStyle.setProperty('--label-ring-rgb', theme.ring.join(', '));
   rootStyle.setProperty('--label-panel-rgb', theme.panel.join(', '));
   rootStyle.setProperty('--label-ink-rgb', theme.ink.join(', '));
+  const panelLum = (0.2126 * theme.panel[0] + 0.7152 * theme.panel[1] + 0.0722 * theme.panel[2]) / 255;
+  if (panelLum > 0.64) {
+    rootStyle.setProperty('--record-groove-rgb', '38, 44, 58');
+    rootStyle.setProperty('--record-groove-alpha', '0.2');
+  } else {
+    rootStyle.setProperty('--record-groove-rgb', '236, 245, 255');
+    rootStyle.setProperty('--record-groove-alpha', '0.24');
+  }
 }
 
 function themeFromKey(meta) {
@@ -329,7 +461,7 @@ function bindMetadataLinks() {
 }
 
 function setTransportEnabled(enabled) {
-  const btns = [btnPrevEl, btnPlayPauseEl, btnNextEl, btnPrevGlassEl, btnPlayPauseGlassEl, btnNextGlassEl];
+  const btns = [btnPrevEl, btnPlayPauseEl, btnNextEl, btnPrevGlassEl, btnPlayPauseGlassEl, btnNextGlassEl, btnPrevMiniEl, btnPlayPauseMiniEl, btnNextMiniEl];
   for (const btn of btns) {
     if (!btn) continue;
     btn.disabled = !enabled;
@@ -347,6 +479,8 @@ function updateTransportUi(meta) {
   if (btnNextEl) btnNextEl.disabled = !canNext;
   if (btnPrevGlassEl) btnPrevGlassEl.disabled = !canPrev;
   if (btnNextGlassEl) btnNextGlassEl.disabled = !canNext;
+  if (btnPrevMiniEl) btnPrevMiniEl.disabled = !canPrev;
+  if (btnNextMiniEl) btnNextMiniEl.disabled = !canNext;
 
   const canToggle = canPlay || canPause;
   if (btnPlayPauseEl) {
@@ -363,6 +497,14 @@ function updateTransportUi(meta) {
     btnPlayPauseGlassEl.dataset.playing = playing ? 'true' : 'false';
     btnPlayPauseGlassEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
     btnPlayPauseGlassEl.title = playing ? 'Pause' : 'Play';
+  }
+
+  if (btnPlayPauseMiniEl) {
+    btnPlayPauseMiniEl.disabled = !canToggle;
+    const playing = (meta.playbackStatus || '').toLowerCase() === 'playing';
+    btnPlayPauseMiniEl.dataset.playing = playing ? 'true' : 'false';
+    btnPlayPauseMiniEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    btnPlayPauseMiniEl.title = playing ? 'Pause' : 'Play';
   }
 }
 
@@ -416,6 +558,41 @@ function bindTransportControls() {
       ev.preventDefault();
       ev.stopPropagation();
       triggerMediaControl('next');
+    });
+  }
+
+  if (btnPrevMiniEl) {
+    btnPrevMiniEl.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      triggerMediaControl('previous');
+    });
+  }
+
+  if (btnPlayPauseMiniEl) {
+    btnPlayPauseMiniEl.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      triggerMediaControl('playpause');
+    });
+  }
+
+  if (btnNextMiniEl) {
+    btnNextMiniEl.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      triggerMediaControl('next');
+    });
+  }
+
+  if (btnMiniCollapseEl) {
+    btnMiniCollapseEl.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      suppressNextWidgetToggle = true;
+      setCurrentView('lid');
+      applyWidgetSize();
+      updateGlassSpectrumGeometry(true);
     });
   }
 }
@@ -576,23 +753,67 @@ function applyWidgetSize() {
   }
 
   const maxW = Math.max(280, window.innerWidth - 24);
-  const baseW = Math.min(cfg.widget.width, maxW);
+  const scaledBaseW = Math.round(uiState.baseWidth * uiState.scale);
+  const baseW = Math.min(scaledBaseW, maxW);
   const baseH = Math.round(baseW / 2);
-  const w = compactMode ? Math.round(baseW * 0.5) : baseW;
-  const h = baseH;
+  const lidW = Math.round(baseW * 0.5);
+  const miniW = lidW;
+  const miniLidW = Math.max(110, Math.round(miniW * 0.5));
+  const miniLidH = Math.max(72, Math.round(baseH * 0.5));
+
+  let w = baseW;
+  let h = baseH;
+  if (currentView === 'lid') {
+    w = lidW;
+  } else if (currentView === 'mini') {
+    w = miniW;
+    h = Math.max(84, Math.round(baseH * 0.34));
+  } else if (currentView === 'mini-lid') {
+    w = miniLidW;
+    h = miniLidH;
+  }
+
   widgetEl.style.width = `${w}px`;
   widgetEl.style.height = `${h}px`;
+
+  // Record position as fixed pixel distances from the widget's right edge.
+  // The widget is right-anchored (right: 18px), so its right edge never moves
+  // during width transitions — right:Xpx on the record stays screen-stable.
+  const recordEl = document.getElementById('record');
+  const recordHalfW = recordEl ? Math.round(recordEl.offsetWidth / 2) : 136;
+  document.documentElement.style.setProperty('--record-right-full', `${Math.round(baseW / 2) - recordHalfW}px`);
+  document.documentElement.style.setProperty('--record-right-lid',  `${Math.round(lidW * 0.49) - recordHalfW}px`);
 }
 
 function isTextTarget(target) {
   if (!(target instanceof Element)) return false;
-  return !!target.closest('#title, #artist, #album, #glassTitle, #glassArtist, #glassAlbum, #sourceKnob, #sourceVolumeGlass, #volumeBtnGlass, #volumePopup, #btnPrev, #btnPlayPause, #btnNext, #btnPrevGlass, #btnPlayPauseGlass, #btnNextGlass, #labelTitle, #labelArtist, #labelTopText, #labelCatalog, #labelSideText');
+  return !!target.closest('#title, #artist, #album, #glassTitle, #glassArtist, #glassAlbum, #sourceKnob, #sourceVolumeGlass, #volumeBtnGlass, #volumePopup, #btnPrev, #btnPlayPause, #btnNext, #btnPrevGlass, #btnPlayPauseGlass, #btnNextGlass, #btnPrevMini, #btnPlayPauseMini, #btnNextMini, #btnMiniCollapse, #miniContent, #miniProgress, #btnSettings, #settingsPanel, #glassMenuBtn, #glassQuickMenu, #quickMini, #quickSettings, #resizeHandle, #labelTitle, #labelArtist, #labelTopText, #labelCatalog, #labelSideText, #pinBtn');
 }
 
 function toggleCompactMode() {
-  compactMode = !compactMode;
-  if (widgetEl) widgetEl.dataset.view = compactMode ? 'lid' : 'full';
+  if (isTransitioning) return;
+  isTransitioning = true;
+  if (currentView === 'mini') {
+    setCurrentView('mini-lid');
+  } else if (currentView === 'mini-lid') {
+    setCurrentView('mini');
+  } else {
+    setCurrentView(compactMode ? 'full' : 'lid');
+  }
   applyWidgetSize();
+  updateGlassSpectrumGeometry(true);
+  if (widgetEl) {
+    widgetEl.dataset.transitioning = 'true';
+    // Close → lid: 1050ms covers recordClose (1000ms) + right transition (400ms delay + 600ms = 1000ms)
+    // Open → full: 600ms covers recordOpen (500ms) + right transition (500ms)
+    const transTimeout = compactMode ? 1050 : 600;
+    setTimeout(() => {
+      if (widgetEl) widgetEl.dataset.transitioning = 'false';
+      isTransitioning = false;
+    }, transTimeout);
+  } else {
+    isTransitioning = false;
+  }
 }
 
 function setWidgetInteractive(interactive) {
@@ -618,12 +839,17 @@ function clampWidgetPosition(x, y) {
 
 function onWidgetMouseDown(ev) {
   if (!widgetEl || ev.button !== 0) return;
-  if (ev.target instanceof Element && ev.target.closest('#sourceKnob, #sourceVolumeGlass, #volumeBtnGlass, #volumePopup')) return;
+  if (ev.target instanceof Element && ev.target.closest('#sourceKnob, #sourceVolumeGlass, #volumeBtnGlass, #volumePopup, #miniControls button, #miniArtWrap, #miniArt, #miniSpectrum')) return;
   const rect = widgetEl.getBoundingClientRect();
   pointerDown = true;
   pointerDownX = ev.clientX;
   pointerDownY = ev.clientY;
-  pendingToggleClick = !isTextTarget(ev.target);
+  if (currentView === 'mini-lid' && ev.target instanceof Element) {
+    const onHoverControls = !!ev.target.closest('#miniControls button, #glassMenuBtn, #glassQuickMenu, #quickMini, #quickSettings, #pinBtn');
+    pendingToggleClick = !onHoverControls;
+  } else {
+    pendingToggleClick = !isTextTarget(ev.target);
+  }
   dragState.offsetX = ev.clientX - rect.left;
   dragState.offsetY = ev.clientY - rect.top;
   dragging = false;
@@ -641,6 +867,32 @@ function onWidgetMouseMove(ev) {
     setWidgetInteractive(isHoveringWidget);
   }
 
+  // Corner-hover pin reveal
+  if (widgetEl && !pointerDown) {
+    const rect = widgetEl.getBoundingClientRect();
+    const inCorner = hovering
+      && ev.clientX >= rect.right - PIN_CORNER_PX
+      && ev.clientY <= rect.top + PIN_CORNER_PX;
+    if (inCorner && !isPinned) {
+      if (!pinHoverTimer) {
+        pinHoverTimer = setTimeout(() => {
+          if (widgetEl) widgetEl.dataset.pinHint = 'true';
+          pinHoverTimer = null;
+        }, 1800);
+      }
+    } else {
+      if (pinHoverTimer) { clearTimeout(pinHoverTimer); pinHoverTimer = null; }
+      if (widgetEl.dataset.pinHint === 'true' && !isPinned) widgetEl.dataset.pinHint = 'false';
+    }
+
+    // Bottom-right resize corner
+    const inResizeCorner = hovering
+      && ev.clientX >= rect.right - RESIZE_CORNER_PX
+      && ev.clientY >= rect.bottom - RESIZE_CORNER_PX;
+    const resizeHint = String(inResizeCorner);
+    if (widgetEl.dataset.resizeHint !== resizeHint) widgetEl.dataset.resizeHint = resizeHint;
+  }
+
   if (!pointerDown || !widgetEl) return;
 
   const dx = ev.clientX - pointerDownX;
@@ -648,6 +900,7 @@ function onWidgetMouseMove(ev) {
   const moved = Math.hypot(dx, dy);
 
   if (!dragging && moved >= DRAG_THRESHOLD) {
+    if (isPinned) return;
     const rect = widgetEl.getBoundingClientRect();
     widgetEl.style.left = `${rect.left}px`;
     widgetEl.style.top = `${rect.top}px`;
@@ -678,8 +931,20 @@ function onWidgetMouseUp(ev) {
   lastMouseX = upX;
   lastMouseY = upY;
   const moved = Math.hypot(upX - pointerDownX, upY - pointerDownY);
+  if (suppressNextWidgetToggle) {
+    suppressNextWidgetToggle = false;
+    pendingToggleClick = false;
+    isHoveringWidget = isMouseOverWidget(upX, upY);
+    setWidgetInteractive(isHoveringWidget);
+    return;
+  }
   if (wasPointerDown && pendingToggleClick && moved < DRAG_THRESHOLD) {
-    toggleCompactMode();
+    if (currentView === 'mini-lid') {
+      setCurrentView('mini');
+      applyWidgetSize();
+    } else {
+      toggleCompactMode();
+    }
   }
 
   pendingToggleClick = false;
@@ -687,12 +952,157 @@ function onWidgetMouseUp(ev) {
   setWidgetInteractive(isHoveringWidget);
 }
 
+function onResizeHandleMouseDown(ev) {
+  if (ev.button !== 0) return;
+  if (!widgetEl) return;
+  const rect = widgetEl.getBoundingClientRect();
+  resizeStartX = ev.clientX;
+  resizeStartWidth = rect.width;
+  resizing = true;
+  setWidgetInteractive(true);
+  ev.preventDefault();
+  ev.stopPropagation();
+}
+
+function onResizeHandleMouseMove(ev) {
+  if (!resizing || !widgetEl) return;
+  const delta = ev.clientX - resizeStartX;
+  const desiredW = resizeStartWidth + delta;
+  const ratio = clampScale(desiredW / uiState.baseWidth);
+  if (Math.abs(ratio - uiState.scale) < 0.001) return;
+  uiState.scale = ratio;
+  if (scaleSliderEl) scaleSliderEl.value = String(Math.round(ratio * 100));
+  applyWidgetSize();
+  updateGlassSpectrumGeometry(true);
+}
+
+function onResizeHandleMouseUp() {
+  if (!resizing) return;
+  resizing = false;
+  setWidgetInteractive(isMouseOverWidget(lastMouseX, lastMouseY));
+}
+
+function onSettingsButtonClick(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  setSettingsOpen(!settingsOpen);
+  setQuickMenuOpen(false);
+}
+
+function onGlassMenuClick(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  setQuickMenuOpen(!quickMenuOpen);
+}
+
+function onPinButtonClick(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  isPinned = !isPinned;
+  if (widgetEl) {
+    widgetEl.dataset.pinned = String(isPinned);
+    if (isPinned) {
+      // Lock current position so it won't snap on first drag attempt
+      const rect = widgetEl.getBoundingClientRect();
+      widgetEl.style.left = `${rect.left}px`;
+      widgetEl.style.top = `${rect.top}px`;
+      widgetEl.style.right = 'auto';
+      widgetEl.dataset.pinHint = 'false';
+    }
+  }
+  if (pinBtnEl) pinBtnEl.setAttribute('aria-pressed', String(isPinned));
+}
+
+function onQuickMiniClick(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  const next = (currentView === 'mini' || currentView === 'mini-lid') ? 'full' : 'mini';
+  setCurrentView(next);
+  applyWidgetSize();
+  setQuickMenuOpen(false);
+}
+
+function onQuickSettingsClick(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  setQuickMenuOpen(false);
+  setSettingsOpen(true);
+}
+
+function onThemeChanged(ev) {
+  applyTheme(ev && ev.target ? ev.target.value : 'light');
+}
+
+function onScaleChanged(ev) {
+  const raw = Number(ev && ev.target ? ev.target.value : 100);
+  uiState.scale = clampScale((Number.isFinite(raw) ? raw : 100) / 100);
+  applyWidgetSize();
+  updateGlassSpectrumGeometry(true);
+}
+
+function onClearGlassChanged(ev) {
+  const on = !!(ev && ev.target && ev.target.checked);
+  applyGlassClarity(on);
+}
+
+async function onLaunchToggleChanged(ev) {
+  const on = !!(ev && ev.target && ev.target.checked);
+  try {
+    const ok = await ipcRenderer.invoke('settings:launch-on-start:set', on);
+    if (!ok) throw new Error('launch setting update failed');
+    const confirmed = await ipcRenderer.invoke('settings:launch-on-start:get');
+    if (launchToggleEl) launchToggleEl.checked = !!confirmed;
+  } catch {
+    try {
+      const current = await ipcRenderer.invoke('settings:launch-on-start:get');
+      if (launchToggleEl) launchToggleEl.checked = !!current;
+    } catch {
+      if (launchToggleEl) launchToggleEl.checked = !on;
+    }
+  }
+}
+
+async function onCloseAppClick(ev) {
+  if (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  try {
+    await ipcRenderer.invoke('app:close');
+  } catch {
+    window.close();
+  }
+}
+
+function onMiniModeToggle(ev) {
+  const on = !!(ev && ev.target && ev.target.checked);
+  const next = on ? 'mini' : 'full';
+  setCurrentView(next);
+  applyWidgetSize();
+}
+
+async function loadLaunchSetting() {
+  if (!launchToggleEl) return;
+  try {
+    const enabled = await ipcRenderer.invoke('settings:launch-on-start:get');
+    launchToggleEl.checked = !!enabled;
+  } catch {
+    launchToggleEl.checked = false;
+  }
+}
+
+applyTheme(uiState.theme);
+applyGlassClarity(uiState.clearGlass);
+setCurrentView('full');
 applyWidgetSize();
 if (frameEl) frameEl.style.height = `${cfg.widget.barsHeight}px`;
 if (widgetEl) {
   widgetEl.dataset.draggable = 'true';
   widgetEl.dataset.dragging = 'false';
-  widgetEl.dataset.view = 'full';
+  widgetEl.dataset.transitioning = 'false';
+  widgetEl.dataset.pinHint = 'false';
+  widgetEl.dataset.pinned = 'false';
+  widgetEl.dataset.resizeHint = 'false';
   widgetEl.addEventListener('mousedown', onWidgetMouseDown);
 }
 bindMetadataLinks();
@@ -709,11 +1119,91 @@ if (sourceVolumeGlassEl) {
 if (volumeBtnGlassEl) {
   volumeBtnGlassEl.addEventListener('click', onVolumeButtonGlassClick);
 }
+if (btnSettingsEl) {
+  btnSettingsEl.addEventListener('click', onSettingsButtonClick);
+}
+if (glassMenuBtnEl) {
+  glassMenuBtnEl.addEventListener('click', onGlassMenuClick);
+}
+if (pinBtnEl) {
+  pinBtnEl.addEventListener('click', onPinButtonClick);
+}
+if (quickMiniEl) {
+  quickMiniEl.addEventListener('click', onQuickMiniClick);
+}
+if (quickSettingsEl) {
+  quickSettingsEl.addEventListener('click', onQuickSettingsClick);
+}
+if (themeSelectEl) {
+  themeSelectEl.value = uiState.theme;
+  themeSelectEl.addEventListener('change', onThemeChanged);
+}
+if (scaleSliderEl) {
+  scaleSliderEl.value = String(Math.round(uiState.scale * 100));
+  scaleSliderEl.addEventListener('input', onScaleChanged);
+}
+if (clearGlassToggleEl) {
+  clearGlassToggleEl.checked = true;
+  clearGlassToggleEl.addEventListener('change', onClearGlassChanged);
+}
+if (launchToggleEl) {
+  launchToggleEl.addEventListener('change', onLaunchToggleChanged);
+}
+if (miniModeToggleEl) {
+  miniModeToggleEl.checked = false;
+  miniModeToggleEl.addEventListener('change', onMiniModeToggle);
+}
+if (btnCloseAppEl) {
+  btnCloseAppEl.addEventListener('click', onCloseAppClick);
+}
+if (resizeHandleEl) {
+  resizeHandleEl.addEventListener('mousedown', onResizeHandleMouseDown);
+}
+if (miniPaneEl) {
+  miniPaneEl.addEventListener('dblclick', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (currentView === 'mini') setCurrentView('mini-lid');
+    else if (currentView === 'mini-lid') setCurrentView('mini');
+    applyWidgetSize();
+  });
+}
+if (miniArtWrapEl) {
+  miniArtWrapEl.addEventListener('mousedown', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (currentView !== 'mini') return;
+    suppressNextWidgetToggle = true;
+    setCurrentView('mini-lid');
+    applyWidgetSize();
+  });
+}
+if (miniArtEl) {
+  miniArtEl.draggable = false;
+}
+loadLaunchSetting();
 loadSystemVolume();
 window.addEventListener('mousemove', onWidgetMouseMove);
 window.addEventListener('mousemove', onSourceKnobMouseMove);
+window.addEventListener('mousemove', onResizeHandleMouseMove);
 window.addEventListener('mouseup', onWidgetMouseUp);
 window.addEventListener('mouseup', onSourceKnobMouseUp);
+window.addEventListener('mouseup', onResizeHandleMouseUp);
+window.addEventListener('blur', () => {
+  // Safety: release all drag/resize state if the window loses focus
+  if (resizing) { resizing = false; setWidgetInteractive(false); }
+  if (pointerDown) { pointerDown = false; dragging = false; if (widgetEl) widgetEl.dataset.dragging = 'false'; }
+});
+window.addEventListener('mousedown', (ev) => {
+  const target = ev.target;
+  if (!(target instanceof Element)) return;
+  if (settingsOpen && !target.closest('#settingsPanel, #btnSettings, #quickSettings')) {
+    setSettingsOpen(false);
+  }
+  if (quickMenuOpen && !target.closest('#glassQuickMenu, #glassMenuBtn')) {
+    setQuickMenuOpen(false);
+  }
+});
 setWidgetInteractive(false);
 
 function detectAudioActive(freqData, state, cfg) {
@@ -768,7 +1258,227 @@ function updateArcMotion(freqData, state, active, level) {
   rootStyle.setProperty('--arc-opacity', opacity.toFixed(3));
 }
 
+function updateGlassSpectrumGeometry(force = false) {
+  if (!glassSpectrumEl || !widgetEl || !recordEl || !spectrumState.ctx) return;
+
+  const rect = glassSpectrumEl.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(rect.width * dpr));
+  const height = Math.max(1, Math.round(rect.height * dpr));
+  if (force || spectrumState.width !== width || spectrumState.height !== height || spectrumState.dpr !== dpr) {
+    glassSpectrumEl.width = width;
+    glassSpectrumEl.height = height;
+    spectrumState.width = width;
+    spectrumState.height = height;
+    spectrumState.dpr = dpr;
+  }
+
+  const canvasRect = glassSpectrumEl.getBoundingClientRect();
+  const recordRect = recordEl.getBoundingClientRect();
+  const centerX = ((recordRect.left + recordRect.width * 0.5) - canvasRect.left) * dpr;
+  const centerY = ((recordRect.top + recordRect.height * 0.5) - canvasRect.top) * dpr;
+  const recordRadius = Math.max(24, recordRect.width * 0.5 * dpr);
+
+  const geomStamp = `${Math.round(centerX)}:${Math.round(centerY)}:${Math.round(recordRadius)}:${width}:${height}`;
+  if (force || geomStamp !== spectrumState.geomStamp) {
+    spectrumState.centerX = centerX;
+    spectrumState.centerY = centerY;
+    spectrumState.recordRadius = recordRadius;
+    spectrumState.geomStamp = geomStamp;
+  }
+}
+
+function renderGlassSpectrum(freqData, active, level) {
+  if (!glassSpectrumEl || !spectrumState.ctx) return;
+
+  const view = currentView || (widgetEl && widgetEl.dataset.view) || 'full';
+  const lidMode = view === 'lid';
+  if (!lidMode) {
+    if (spectrumState.width > 0 && spectrumState.height > 0) {
+      spectrumState.ctx.clearRect(0, 0, spectrumState.width, spectrumState.height);
+    }
+    return;
+  }
+
+  updateGlassSpectrumGeometry();
+  const ctx = spectrumState.ctx;
+  const { width, height, centerX, centerY, recordRadius, levels } = spectrumState;
+  if (width < 2 || height < 2 || recordRadius < 2) return;
+
+  const dpr = spectrumState.dpr;
+  ctx.clearRect(0, 0, width, height);
+
+  const bars = levels.length; // 64
+  const halfBars = bars / 2;
+  const freqMax = Math.max(16, Math.floor(freqData.length * 0.72));
+
+  // Idle breathing animation
+  spectrumState.idlePhase += 0.016;
+
+  // ── Bass pulse ring ────────────────────────────────────────────────────────
+  const bassBins = Math.min(10, freqData.length);
+  let bassSum = 0;
+  for (let b = 0; b < bassBins; b++) bassSum += freqData[b];
+  const bassNow = clamp(bassSum / bassBins / 255, 0, 1);
+  spectrumState.bass = spectrumState.bass * 0.84 + bassNow * 0.16;
+  const br = spectrumState.bass;
+  const ringAlpha = clamp(0.2 + br * 0.42, 0.16, 0.62);
+  const ringR = recordRadius + (1 + br * 4) * dpr;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, ringR, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(126, 209, 255, ${ringAlpha.toFixed(3)})`;
+  ctx.lineWidth = (1.2 + br * 3) * dpr;
+  ctx.shadowColor = `rgba(96, 198, 255, ${(ringAlpha * 0.85).toFixed(3)})`;
+  ctx.shadowBlur = (6 + br * 18) * dpr;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Rotating concentric ring lattice so the effect remains on-glass even when bars are subtle.
+  const ringCount = 3;
+  const baseRot = spectrumState.idlePhase * (0.8 + br * 0.9);
+  for (let r = 0; r < ringCount; r++) {
+    const rr = recordRadius + (7 + r * 8 + Math.sin(spectrumState.idlePhase * (1.1 + r * 0.23)) * (0.9 + br * 1.8)) * dpr;
+    const segs = 72;
+    const a0 = baseRot * (r % 2 === 0 ? 1 : -1) + r * 0.8;
+    const aAlpha = clamp(0.16 + br * 0.26 - r * 0.03, 0.08, 0.38);
+
+    ctx.beginPath();
+    for (let s = 0; s <= segs; s++) {
+      const t = s / segs;
+      const a = a0 + t * Math.PI * 2;
+      const wobble = Math.sin(a * (2 + r) + spectrumState.idlePhase * (1.4 + r * 0.2)) * (0.7 + br * 1.8) * dpr;
+      const x = centerX + Math.cos(a) * (rr + wobble);
+      const y = centerY + Math.sin(a) * (rr + wobble);
+      if (s === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.lineWidth = (0.9 + r * 0.18) * dpr;
+    ctx.strokeStyle = `rgba(${r === 1 ? '78, 187, 255' : '97, 226, 241'}, ${aAlpha.toFixed(3)})`;
+    ctx.stroke();
+  }
+
+  // ── 360° symmetric radial bars ─────────────────────────────────────────────
+  const baseGap = 4 * dpr;
+  const maxBarLen = 24 * dpr;
+
+  for (let i = 0; i < bars; i++) {
+    // Symmetric: both halves mirror each other around the top (–PI/2)
+    const half = i < halfBars ? i : bars - 1 - i;
+    const norm = half / (halfBars - 1);          // 0 = top, 1 = bottom
+    const side = i < halfBars ? 1 : -1;
+    const angle = -Math.PI / 2 + side * norm * Math.PI;
+
+    // Log-curved frequency mapping (more detail in lows)
+    const t = Math.pow(norm, 0.8);
+    const bin = Math.min(freqData.length - 1, Math.floor(1 + t * (freqMax - 1)));
+    const raw = clamp(freqData[bin] / 255, 0, 1);
+    const idleTarget = (0.055 + Math.sin(spectrumState.idlePhase + norm * Math.PI * 2) * 0.02) * (1 - norm * 0.3);
+    const target = active ? raw * 0.95 : idleTarget;
+    const resp = target > levels[i] ? 0.26 : 0.11;
+    levels[i] += (target - levels[i]) * resp;
+
+    const amp = Math.pow(levels[i], 0.64);
+    const r1 = recordRadius + baseGap;
+    const r2 = recordRadius + baseGap + amp * maxBarLen;
+    const x1 = centerX + Math.cos(angle) * r1;
+    const y1 = centerY + Math.sin(angle) * r1;
+    const x2 = centerX + Math.cos(angle) * r2;
+    const y2 = centerY + Math.sin(angle) * r2;
+
+    // Glass gradient: opaque white-blue base → transparent tip
+    const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+    const baseA = clamp(0.48 + amp * 0.40, 0.38, 0.90);
+    const tipA  = clamp(amp * 0.18, 0, 0.24);
+    const col   = active ? '132, 222, 255' : '92, 184, 234';
+    grad.addColorStop(0, `rgba(${col}, ${baseA.toFixed(3)})`);
+    grad.addColorStop(1, `rgba(${col}, ${tipA.toFixed(3)})`);
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineWidth = clamp((0.9 + amp * 1.8) * dpr, 0.8 * dpr, 3.2 * dpr);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = grad;
+    ctx.stroke();
+  }
+}
+
+function renderMiniSpectrum(freqData, active) {
+  if (!miniSpectrumState.ctx || !miniSpectrumEl || !miniArtEl) return;
+  if (currentView !== 'mini' && currentView !== 'mini-lid') {
+    if (miniSpectrumState.width > 0 && miniSpectrumState.height > 0) {
+      miniSpectrumState.ctx.clearRect(0, 0, miniSpectrumState.width, miniSpectrumState.height);
+    }
+    return;
+  }
+
+  const rect = miniSpectrumEl.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) return;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(rect.width * dpr));
+  const height = Math.max(1, Math.round(rect.height * dpr));
+  if (miniSpectrumState.width !== width || miniSpectrumState.height !== height || miniSpectrumState.dpr !== dpr) {
+    miniSpectrumEl.width = width;
+    miniSpectrumEl.height = height;
+    miniSpectrumState.width = width;
+    miniSpectrumState.height = height;
+    miniSpectrumState.dpr = dpr;
+  }
+
+  const ctx = miniSpectrumState.ctx;
+  ctx.clearRect(0, 0, width, height);
+  miniSpectrumState.phase += 0.02;
+
+  const levels = miniSpectrumState.levels;
+  const bars = levels.length;
+  const span = width * 0.86;
+  const startX = (width - span) * 0.5;
+  const w = span / bars;
+  const baseline = height * 0.88;
+  const maxH = height * 0.45;
+
+  for (let i = 0; i < bars; i++) {
+    const t = i / Math.max(1, bars - 1);
+    const bin = Math.min(freqData.length - 1, Math.floor(Math.pow(t, 0.82) * (freqData.length * 0.58)));
+    const raw = clamp(freqData[bin] / 255, 0, 1);
+    const idle = 0.03 + Math.sin(miniSpectrumState.phase + i * 0.26) * 0.015;
+    const target = active ? raw : idle;
+    const rate = target > levels[i] ? 0.32 : 0.12;
+    levels[i] += (target - levels[i]) * rate;
+    const amp = Math.pow(levels[i], 0.72);
+    const h = Math.max(1 * dpr, amp * maxH);
+
+    const x = startX + i * w;
+    const grad = ctx.createLinearGradient(x, baseline - h, x, baseline);
+    grad.addColorStop(0, 'rgba(202, 238, 255, 0.85)');
+    grad.addColorStop(1, 'rgba(120, 174, 233, 0.18)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, baseline - h, Math.max(1, w * 0.68), h);
+  }
+}
+
+function updatePlaybackProgress(nowMs) {
+  if (!miniProgressFillEl) return;
+  if (playbackProgressState.playing) {
+    const dt = Math.max(0, nowMs - playbackProgressState.lastTickMs);
+    playbackProgressState.positionMs += dt;
+  }
+  playbackProgressState.lastTickMs = nowMs;
+  const duration = Math.max(1, playbackProgressState.durationMs || (3 * 60 * 1000));
+  playbackProgressState.positionMs = clamp(playbackProgressState.positionMs, 0, duration);
+  const pct = clamp((playbackProgressState.positionMs / duration) * 100, 0, 100);
+  miniProgressFillEl.style.width = `${pct.toFixed(2)}%`;
+
+  const trackT = clamp(pct / 100, 0, 1);
+  const sway = Math.sin(nowMs / 430) * (currentMeta.playbackStatus === 'playing' ? 0.9 : 0.25);
+  rootStyle.setProperty('--tonearm-track', trackT.toFixed(4));
+  rootStyle.setProperty('--tonearm-sway', `${sway.toFixed(2)}deg`);
+}
+
 function setMetadata(meta) {
+  const prevTrackKey = playbackProgressState.trackKey;
   currentMeta = {
     appId: meta.appId || '',
     title: meta.title || '',
@@ -776,6 +1486,8 @@ function setMetadata(meta) {
     album: meta.album || '',
     artwork: meta.artwork || '',
     playbackStatus: (meta.playbackStatus || 'paused').toLowerCase(),
+    durationMs: Number.isFinite(meta.durationMs) ? Math.max(0, Number(meta.durationMs)) : 0,
+    positionMs: Number.isFinite(meta.positionMs) ? Math.max(0, Number(meta.positionMs)) : 0,
     controls: {
       canPlay: meta.controls ? meta.controls.canPlay !== false : true,
       canPause: meta.controls ? meta.controls.canPause !== false : true,
@@ -791,6 +1503,8 @@ function setMetadata(meta) {
   if (glassTitleEl) glassTitleEl.textContent = meta.title || 'Unknown Track';
   if (glassArtistEl) glassArtistEl.textContent = meta.artist || 'Unknown Artist';
   if (glassAlbumEl) glassAlbumEl.textContent = meta.album || 'Album unknown';
+  if (miniTitleEl) miniTitleEl.textContent = meta.title || 'Unknown Track';
+  if (miniArtistEl) miniArtistEl.textContent = meta.artist || 'Unknown Artist';
   updateVolumeUiSource(currentMeta);
   updateTransportUi(currentMeta);
   if (labelTitleEl) labelTitleEl.textContent = fitLabelText(meta.title || 'Unknown Track', 16);
@@ -804,6 +1518,33 @@ function setMetadata(meta) {
     if (meta.artwork) recordArtEl.src = meta.artwork;
     else recordArtEl.removeAttribute('src');
   }
+  if (miniArtEl) {
+    if (meta.artwork) miniArtEl.src = meta.artwork;
+    else miniArtEl.removeAttribute('src');
+  }
+
+  const trackKey = `${currentMeta.appId}|${currentMeta.title}|${currentMeta.artist}`;
+  playbackProgressState.trackKey = trackKey;
+  playbackProgressState.playing = currentMeta.playbackStatus === 'playing';
+  playbackProgressState.lastTickMs = performance.now();
+
+  // If metadata does not provide timeline data, use a soft default duration.
+  const fallbackDuration = 3 * 60 * 1000;
+  const duration = currentMeta.durationMs > 0 ? currentMeta.durationMs : fallbackDuration;
+  const position = clamp(currentMeta.positionMs || 0, 0, duration);
+  playbackProgressState.durationMs = duration;
+  playbackProgressState.positionMs = position;
+
+  if (prevTrackKey && prevTrackKey !== trackKey && recordEl) {
+    recordEl.dataset.transition = 'burn';
+    setTimeout(() => {
+      if (recordEl) recordEl.dataset.transition = 'none';
+    }, 940);
+  }
+
+  // Adapt record label line contrast based on current inferred theme brightness.
+  const isDarkTheme = uiState.theme === 'dark' || uiState.theme === 'transparent';
+  rootStyle.setProperty('--label-panel-rgb', isDarkTheme ? '230, 238, 248' : '255, 248, 216');
 
   updateAlbumMarqueeState();
 }
@@ -820,6 +1561,8 @@ async function startMetadataBridge() {
         title: initial.title || 'Unknown Track',
         artwork: initial.artwork || '',
         playbackStatus: initial.playbackStatus || 'paused',
+        durationMs: initial.durationMs,
+        positionMs: initial.positionMs,
         controls: initial.controls || {}
       });
     }
@@ -838,6 +1581,8 @@ async function startMetadataBridge() {
       title: meta.title || 'Unknown Track',
       artwork: meta.artwork || '',
       playbackStatus: meta.playbackStatus || 'paused',
+      durationMs: meta.durationMs,
+      positionMs: meta.positionMs,
       controls: meta.controls || {}
     });
   });
@@ -854,6 +1599,7 @@ async function start() {
     window.addEventListener('resize', () => {
       applyWidgetSize();
       updateAlbumMarqueeState();
+      updateGlassSpectrumGeometry(true);
       resize();
     });
 
@@ -863,9 +1609,13 @@ async function start() {
       requestAnimationFrame(loop);
       const freq = audio.getFreq();
       const time = audio.getTime();
+      const now = performance.now();
       const { active, level } = detectAudioActive(freq, detector, cfg);
       setStatus(active, level);
       updateArcMotion(freq, arcMotion, active, level);
+      renderGlassSpectrum(freq, active, level);
+      renderMiniSpectrum(freq, active);
+      updatePlaybackProgress(now);
       update(freq, time);
       renderer.render(scene, camera);
     }

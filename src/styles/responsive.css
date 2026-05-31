@@ -1,0 +1,67 @@
+/* ============================================================
+   responsive.css — Responsive overrides for narrow viewports
+   ============================================================ */
+
+@media (max-width: 640px) {
+  #widget { width: calc(100vw - 16px); height: calc((100vw - 16px) / 2); top: 8px; right: 8px; }
+  #leftPane { padding: 10px 10px 8px 8px; }
+  #title { font-size: 16px; }
+  #artist { font-size: 13px; }
+  #artist { margin-top: 26px; }
+  #album { font-size: 11px; }
+  #album { width: min(100%, 126px); max-width: 126px; }
+  #frame { height: 50px; margin-top: 4px; margin-right: 34px; }
+  #rightPane::before { left: -280px; width: 280px; }
+  #record { width: 186px; height: 186px; margin-top: -93px; right: var(--record-right-full, calc(50% - 93px)); }
+  #record::before { content: none; }
+  #record::after { width: 74px; height: 74px; margin-left: -37px; margin-top: -37px; box-shadow: inset 0 0 0 2px rgba(18, 24, 35, 0.42), inset 0 0 0 11px rgba(0, 0, 0, 0.18); }
+  #recordLabel { width: 54px; height: 54px; margin-left: -27px; margin-top: -27px; padding: 6px 5px; gap: 1px; }
+  #recordLabel::before { inset: 4px; }
+  #recordLabel::after { width: 6px; height: 6px; margin-left: -3px; margin-top: -3px; }
+  #labelTopText, #labelCatalog, #labelSideText { font-size: 4px; }
+  #labelTopText { top: 6px; }
+  #labelCatalog { bottom: 6px; }
+  #labelSideText { left: 7px; }
+  #labelTitle { font-size: 5px; max-width: 70%; }
+  #labelArtist { font-size: 4px; max-width: 70%; }
+  #tonearm {
+    width: 92px;
+    height: 13px;
+    left: calc(28.8% - 9px);
+    bottom: 12px;
+    transform: rotate(-76deg);
+    clip-path: path("M0 7 C14 3, 30 3, 46 7 C62 10, 77 10, 92 7 L92 12 C77 12, 62 12, 46 10 C30 8, 14 8, 0 12 Z");
+  }
+  #tonearm::before { left: -5px; top: 3px; width: 12px; height: 10px; }
+  #tonearm::after { left: 9px; right: 10px; top: 3px; height: 2px; }
+  #armMount { width: 26px; height: 26px; left: calc(28.8% - 19px); bottom: 7px; }
+  #needle { width: 18px; height: 10px; right: 1px; top: 2px; }
+  #controls { margin-top: auto; }
+  .knob { width: 20px; height: 20px; }
+  #glassControls { height: 46px; padding: 6px 10px; gap: 8px; }
+  #transport { gap: 5px; }
+  #glassTransport { gap: 8px; }
+  .mediaBtn { width: 20px; height: 20px; }
+  .glassBtn { width: 30px; height: 30px; }
+  .mediaBtn svg { width: 10px; height: 10px; }
+  #glassControls { bottom: 8px; }
+  #glassVolumeDock { bottom: 8px; right: 8px; }
+  #volumeWrap { width: 30px; height: 30px; }
+  #volumePopup { width: 38px; height: 84px; bottom: calc(100% + 2px); padding: 7px 5px; }
+  #sourceVolumeGlass { width: 62px; height: 16px; }
+  #sourceVolumeGlass::-webkit-slider-runnable-track { height: 5px; }
+  #sourceVolumeGlass::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -4px; }
+  #glassMeta { left: 10px; top: 8px; max-width: 74%; }
+  #glassTitle { font-size: 11px; }
+  #glassArtist { font-size: 10px; }
+  #glassAlbum { font-size: 9px; }
+  #settingsPanel {
+    width: 186px;
+    right: 6px;
+    top: 30px;
+    padding: 8px;
+  }
+  .settingsRow { font-size: 10px; }
+  .settingsRow select, .settingsRow input[type="range"] { width: 94px; }
+  #glassVolumeDock { bottom: 16px; right: 8px; }
+}

@@ -373,6 +373,12 @@ function sendMeta(sessionData) {
     return;
   }
 
+  const timeline = sessionData.timelineProperties || sessionData.timeline || {};
+  const rawDuration = sessionData.endTimeMs ?? sessionData.durationMs ?? sessionData.duration ?? timeline.durationMs ?? timeline.duration;
+  const rawPosition = sessionData.positionMs ?? sessionData.position ?? timeline.positionMs ?? timeline.position;
+  const durationMs = Number.isFinite(Number(rawDuration)) ? Math.max(0, Number(rawDuration)) : 0;
+  const positionMs = Number.isFinite(Number(rawPosition)) ? Math.max(0, Number(rawPosition)) : 0;
+
   const meta = {
     appId: sessionData.sourceAppUserModelId || '',
     title: sessionData.title || '',
@@ -380,6 +386,8 @@ function sendMeta(sessionData) {
     album: sessionData.albumTitle || '',
     artwork: sessionData.thumbnail || '',
     playbackStatus: sessionData.playbackStatus || 'paused',
+    durationMs,
+    positionMs,
     controls: {
       canPlay: sessionData.controls ? sessionData.controls.canPlay !== false : true,
       canPause: sessionData.controls ? sessionData.controls.canPause !== false : true,
@@ -485,6 +493,25 @@ ipcMain.handle('media-meta:get', () => latestMeta);
 ipcMain.handle('system-volume:get', async () => getSystemVolume());
 ipcMain.handle('system-volume:set', async (_, level) => setSystemVolume(level));
 ipcMain.handle('media-control', async (_, action) => handleMediaControl(action));
+ipcMain.handle('settings:launch-on-start:get', () => {
+  try {
+    return app.getLoginItemSettings().openAtLogin;
+  } catch {
+    return false;
+  }
+});
+ipcMain.handle('settings:launch-on-start:set', (_, enabled) => {
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!enabled });
+    return true;
+  } catch {
+    return false;
+  }
+});
+ipcMain.handle('app:close', () => {
+  setImmediate(() => app.quit());
+  return true;
+});
 
 app.whenReady().then(() => {
   session.defaultSession.setDisplayMediaRequestHandler((_, callback) => {

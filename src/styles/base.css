@@ -1,0 +1,39 @@
+/* ============================================================
+   base.css — CSS resets and custom property definitions
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: transparent; overflow: hidden; min-height: 100vh; }
+canvas { display: block; width: 100%; height: 100%; }
+
+:root {
+  --metal-1: #f2f4f7;
+  --metal-2: #d2d8e1;
+  --metal-3: #a8b2c1;
+  --widget-border: rgba(132, 142, 156, 0.8);
+  --widget-shadow: 0 20px 40px rgba(0, 0, 0, 0.28);
+  --ink-1: #111721;
+  --ink-2: #4b5a72;
+  --label-base-rgb: 246, 223, 24;
+  --label-ring-rgb: 215, 72, 54;
+  --label-ink-rgb: 20, 24, 35;
+  --label-panel-rgb: 255, 248, 216;
+  --source-knob-angle: 18deg;
+  --source-volume-pct: 50%;
+  --source-accent: #6f8199;
+  --arc-bounce-y: 0;
+  --arc-spread: 0;
+  --arc-shift-x: 0px;
+  --arc-opacity: 0.48;
+  --spectrum-glow-rgb: 210, 233, 255;
+  --tonearm-track: 0;
+  --tonearm-sway: 0deg;
+  --glass-clarity: 0.72;
+  --widget-height: 280px;
+  --record-groove-rgb: 236, 245, 255;
+  --record-groove-alpha: 0.22;
+  --drawer-duration: 760ms;
+  --drawer-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Shelf (widget border, grid, arm) snaps shut faster than the record's journey */
+  --shelf-duration: 280ms;
+}

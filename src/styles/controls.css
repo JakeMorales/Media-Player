@@ -1,0 +1,354 @@
+/* ============================================================
+   controls.css — Buttons (utility, media, glass), knob, volume dock & popup,
+                  glass controls bar, glass spectrum
+   ============================================================ */
+
+/* ── Utility buttons (full view) ── */
+
+.utilityBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(101, 114, 134, 0.48);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.56), rgba(191, 206, 224, 0.42));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 3px 7px rgba(0, 0, 0, 0.16);
+  color: rgba(34, 45, 61, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.utilityBtn svg {
+  width: 12px;
+  height: 12px;
+  fill: rgba(36, 49, 67, 0.95);
+  pointer-events: none;
+}
+
+#btnSettings {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(101, 114, 134, 0.58);
+  background:
+    conic-gradient(from 16deg, #c9d2de, #a9b4c5, #e8edf5, #9ca8bc, #c9d2de),
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.94), rgba(163, 176, 196, 0.96));
+  box-shadow: 0 0 0 1px rgba(94, 106, 124, 0.5), 0 3px 7px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  color: rgba(34, 45, 61, 0.92);
+  align-self: center;
+}
+
+#btnSettings svg {
+  width: 13px;
+  height: 13px;
+  color: rgba(36, 49, 67, 0.95);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateY(-0.5px);
+}
+
+/* ── Media buttons (metallic, used in transport & glass controls) ── */
+
+.mediaBtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(101, 114, 134, 0.58);
+  background:
+    conic-gradient(from 16deg, #c9d2de, #a9b4c5, #e8edf5, #9ca8bc, #c9d2de),
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.94), rgba(163, 176, 196, 0.96));
+  color: rgba(34, 45, 61, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px rgba(94, 106, 124, 0.5), 0 3px 7px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 0;
+}
+
+.glassBtn {
+  border-color: rgba(174, 199, 226, 0.24);
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04) 40%, rgba(0, 0, 0, 0) 70%),
+    linear-gradient(160deg, rgba(248, 254, 255, 0.09), rgba(157, 189, 220, 0.06));
+  color: rgba(28, 48, 72, 0.95);
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 245, 255, 0.09),
+    inset 0 4px 8px rgba(255, 255, 255, 0.02),
+    0 4px 10px rgba(13, 27, 44, 0.12);
+  width: 34px;
+  height: 34px;
+}
+
+.mediaBtn svg {
+  width: 12px;
+  height: 12px;
+  fill: rgba(36, 49, 67, 0.95);
+  display: block;
+  pointer-events: none;
+}
+
+.glassBtn svg {
+  fill: rgba(33, 55, 80, 0.98);
+}
+
+/* Play/pause icon toggle */
+#btnPlayPause .icon-pause,
+#btnPlayPauseGlass .icon-pause { display: none; }
+#btnPlayPause[data-playing="true"] .icon-play,
+#btnPlayPauseGlass[data-playing="true"] .icon-play { display: none; }
+#btnPlayPause[data-playing="true"] .icon-pause,
+#btnPlayPauseGlass[data-playing="true"] .icon-pause { display: block; }
+
+.mediaBtn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.glassBtn:active {
+  box-shadow: inset 0 2px 6px rgba(38, 69, 101, 0.24), 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+
+.mediaBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+/* ── Source / input knob ── */
+
+.knob {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background:
+    conic-gradient(from 15deg, #c8cfda, #a8b2c1, #e6ebf3, #9ba6b7, #c8cfda),
+    radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.9), rgba(160, 172, 191, 0.95));
+  box-shadow: 0 0 0 1px rgba(95, 107, 126, 0.55), 0 3px 7px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  position: relative;
+}
+
+.knob::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  background: var(--source-accent);
+  border-radius: 2px;
+  transform: rotate(var(--source-knob-angle));
+  transform-origin: center 7px;
+}
+
+#sourceKnob {
+  box-shadow: 0 0 0 1px rgba(95, 107, 126, 0.55), 0 3px 7px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 0 8px color-mix(in srgb, var(--source-accent) 24%, transparent);
+  position: relative;
+  cursor: ns-resize;
+}
+
+#sourceKnob::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--source-accent) 74%, #d9e1ea);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+/* ── Volume dock (lid overlay, bottom-right) ── */
+
+#volumeWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+}
+
+#glassVolumeDock {
+  position: absolute;
+  right: 10px;
+  bottom: 19px;
+  z-index: 24;
+  transform: scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease, transform 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+#widget[data-view="lid"]:hover #glassVolumeDock {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+/* ── Glass spectrum canvas ── */
+
+#glassSpectrum {
+  position: absolute;
+  inset: 0;
+  z-index: 21;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+#widget[data-view="lid"] #glassSpectrum {
+  opacity: 1;
+  /* Spectrum appears as the glass flash dims */
+  transition: opacity 600ms cubic-bezier(0.34, 1.2, 0.64, 1) 2600ms;
+}
+
+/* ── Volume popup ── */
+
+#volumeWrap::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 26px;
+  height: 12px;
+  transform: translateX(-50%);
+}
+
+#volumeBtnGlass {
+  position: relative;
+  z-index: 2;
+}
+
+#volumeBtnGlass .icon-muted { display: none; }
+#volumeBtnGlass[data-muted="true"] .icon-volume { display: none; }
+#volumeBtnGlass[data-muted="true"] .icon-muted { display: block; }
+
+#volumePopup {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translate(-50%, 6px) scale(0.92);
+  width: 44px;
+  height: 94px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(197, 221, 245, 0.24);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.11), rgba(170, 200, 228, 0.07));
+  box-shadow:
+    inset 0 0 0 1px rgba(236, 247, 255, 0.12),
+    0 7px 15px rgba(12, 25, 44, 0.12);
+  backdrop-filter: blur(8px) saturate(1.02);
+  -webkit-backdrop-filter: blur(8px) saturate(1.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 300ms cubic-bezier(0.23, 1, 0.32, 1);
+  z-index: 3;
+}
+
+#volumeWrap:hover #volumePopup {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+}
+
+#sourceVolumeGlass {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 18px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  display: block;
+  margin: 0;
+  transform: translateX(-1px) rotate(-90deg);
+  transform-origin: center;
+}
+
+#sourceVolumeGlass::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(174, 200, 226, 0.42);
+  background:
+    linear-gradient(90deg,
+      rgba(255, 255, 255, 0.95) 0,
+      rgba(255, 255, 255, 0.95) var(--source-volume-pct),
+      rgba(255, 255, 255, 0.24) var(--source-volume-pct),
+      rgba(255, 255, 255, 0.24) 100%);
+  box-shadow: inset 0 1px 2px rgba(31, 48, 71, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.34);
+}
+
+#sourceVolumeGlass::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 999px;
+  border: 1px solid rgba(172, 196, 220, 0.62);
+  background:
+    radial-gradient(circle at 28% 28%, rgba(255, 255, 255, 0.8), rgba(227, 244, 255, 0.24) 44%, rgba(149, 183, 215, 0.28));
+  box-shadow: 0 2px 5px rgba(17, 31, 48, 0.2), inset 0 0 0 1px rgba(238, 249, 255, 0.44);
+}
+
+/* ── Glass controls bar (lid hover, bottom-center) ── */
+
+#glassControls {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(202, 222, 243, 0.2);
+  background:
+    linear-gradient(138deg, rgba(255, 255, 255, calc(0.06 * var(--glass-clarity))), rgba(208, 226, 244, calc(0.04 * var(--glass-clarity))) 54%, rgba(152, 179, 208, calc(0.02 * var(--glass-clarity)))),
+    linear-gradient(180deg, rgba(255, 255, 255, calc(0.04 * var(--glass-clarity))), rgba(109, 139, 173, calc(0.02 * var(--glass-clarity))));
+  box-shadow:
+    inset 0 0 0 1px rgba(234, 245, 255, calc(0.12 * var(--glass-clarity))),
+    inset 0 5px 10px rgba(255, 255, 255, calc(0.03 * var(--glass-clarity))),
+    inset 0 -8px 14px rgba(58, 82, 112, calc(0.05 * var(--glass-clarity))),
+    0 8px 18px rgba(12, 23, 40, 0.12);
+  backdrop-filter: blur(7px) saturate(1.02);
+  -webkit-backdrop-filter: blur(7px) saturate(1.02);
+  z-index: 23;
+  pointer-events: auto;
+  transform: translate(-50%, 10px) scale(0.92);
+  transition: opacity 260ms ease, transform 320ms cubic-bezier(0.23, 1, 0.32, 1);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#widget[data-view="lid"]:hover #glassControls {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  pointer-events: auto;
+}
+
+#glassTransport {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}

@@ -1,0 +1,120 @@
+/* ============================================================
+   animations.css — All @keyframes definitions and animation triggers
+   ============================================================ */
+
+/* ── Record spin ── */
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Record burn glow ── */
+
+@keyframes recordBurn {
+  0% { opacity: 0; transform: scale(0.88); filter: blur(0.5px); }
+  20% { opacity: 0.78; transform: scale(1.02); filter: blur(1.2px); }
+  65% { opacity: 0.42; transform: scale(1.07); filter: blur(1.6px); }
+  100% { opacity: 0; transform: scale(1.12); filter: blur(1.8px); }
+}
+
+/*
+ * Close: 4 phases — pull left, HOLD (breathe), glide into slot, click-seat
+ *
+ * Hold is 18%-32%: ~384ms at 1200ms total. Shelf snaps at 420ms.
+ * Record sits clearly outside the sleeve while the shelf closes,
+ * then glides in with ease-in-out — deliberate, like a floppy into a port.
+ */
+@keyframes recordClose {
+  0% {
+    transform: scale(1) translateX(0);
+    /* Snappy pull-left */
+    animation-timing-function: cubic-bezier(0.5, 0, 0.82, 0.55);
+  }
+  12% {
+    /* Pull-away peak (~120ms) */
+    transform: scale(1.04) translateX(-26px);
+    /* Gentle spring right */
+    animation-timing-function: cubic-bezier(0.34, 1.25, 0.64, 1);
+  }
+  24% {
+    /* Wiggle: right swing (~240ms) */
+    transform: scale(1.02) translateX(-13px);
+    /* Gentle spring back left */
+    animation-timing-function: cubic-bezier(0.34, 1.25, 0.64, 1);
+  }
+  36% {
+    /* Wiggle: back left (~360ms) */
+    transform: scale(1.04) translateX(-23px);
+    /* Spring right — insert begins */
+    animation-timing-function: cubic-bezier(0.34, 1.25, 0.64, 1);
+  }
+  44% {
+    /* Wiggle: right nudge — right transition fires at ~400ms */
+    transform: scale(1.02) translateX(-11px);
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+  88% {
+    /* Deep in slot (~880ms) */
+    transform: scale(0.91) translateX(11px);
+    animation-timing-function: cubic-bezier(0.34, 1.45, 0.64, 1);
+  }
+  100% { transform: scale(0.93) translateX(8px); }
+}
+
+/*
+ * Open: ejected from sleeve with a quick pop-left then spring bounce.
+ */
+@keyframes recordOpen {
+  0% {
+    transform: scale(0.93) translateX(8px);
+    /* Fast eject pop */
+    animation-timing-function: cubic-bezier(0.55, 0, 0.3, 1);
+  }
+  28% {
+    /* Overshoot left (~140ms) */
+    transform: scale(1.07) translateX(-20px);
+    /* Spring back to rest */
+    animation-timing-function: cubic-bezier(0.34, 1.28, 0.64, 1);
+  }
+  100% { transform: scale(1) translateX(0); }
+}
+
+/* Liquid bead travels from top to bottom — bead leads, amber wake fades behind it */
+@keyframes slotReveal {
+  0%, 36%   { opacity: 0; transform: scaleY(0); }
+  38%       { opacity: 1; transform: scaleY(0.005); animation-timing-function: linear; }
+  80%       { opacity: 1; transform: scaleY(1); }
+  90%       { opacity: 0.45; transform: scaleY(1); }
+  100%      { opacity: 0; transform: scaleY(1); }
+}
+
+/* Glass catches light: ramps to a bright flash, holds, then dims slowly to rest */
+@keyframes glassReveal {
+  0%   { opacity: 0; }
+  12%  { opacity: 0.08; }
+  32%  { opacity: 0.30; }
+  52%  { opacity: 0.28; }
+  72%  { opacity: 0.22; }
+  88%  { opacity: 0.19; }
+  100% { opacity: 0.18; }
+}
+
+/* ── Animation triggers ── */
+
+/* Linear overall — each phase's easing is defined per-keyframe above */
+#widget[data-view="lid"][data-transitioning="true"] #record {
+  animation: recordClose 1000ms linear 1 both;
+  /* z-index 3: stays behind rightPane (z-index 4) so the record
+     slides INTO the sleeve, not over the top of it */
+  z-index: 3;
+}
+
+#widget[data-view="lid"][data-transitioning="true"] #sleeveSlot {
+  animation: slotReveal 1000ms ease-out 1 both;
+}
+
+#widget[data-view="full"][data-transitioning="true"] #record {
+  animation: recordOpen 500ms linear 1 both;
+  z-index: 3;
+}

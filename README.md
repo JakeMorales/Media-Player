@@ -39,7 +39,7 @@ Runs transparent and click-through alongside Wallpaper Engine or any other deskt
 ```bash
 npm install
 npm start        # production
-npm run dev      # dev mode: opens DevTools + hot-reloads on src/ changes
+npm run dev      # dev mode: opens DevTools, restarts on main.js changes, hot-reloads src/ changes
 ```
 
 ---
@@ -112,7 +112,7 @@ If unavailable, fallback labels are shown while the visualizer still reacts to a
 | Click-through | `setIgnoreMouseEvents(true, { forward: true })` after audio starts |
 | Frameless | `frame: false` |
 | System tray | Right-click tray icon → Show / Hide / Quit |
-| Hot-reload | `npm run dev` watches `src/` with 150 ms debounce |
+| Hot-reload | `npm run dev` uses nodemon for `main.js` restarts and in-app `src/` reload with 150 ms debounce |
 
 > **Desktop layer (always-on-bottom):** Electron has no cross-platform API for placing
 > a window below all others on Windows. Options:
