@@ -27,9 +27,8 @@
   position: relative;
   z-index: 1;
   overflow: hidden;
-  transform: translateX(0);
-  /* Open: shelf finishes at 280ms, then content slides in from the right */
-  transition: opacity 380ms ease 300ms, transform 280ms var(--drawer-ease) 300ms;
+  /* Content fades in after the shelf finishes opening (300ms delay) */
+  transition: opacity 380ms ease 300ms;
 }
 
 /* ── Metadata block ── */

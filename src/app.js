@@ -76,6 +76,7 @@ let settingsOpen = false;
 let quickMenuOpen = false;
 let resizing = false;
 let resizeStartX = 0;
+let resizeStartY = 0;
 let resizeStartWidth = 0;
 let suppressNextWidgetToggle = false;
 const dragState = { offsetX: 0, offsetY: 0 };
@@ -776,11 +777,24 @@ function applyWidgetSize() {
   widgetEl.style.width = `${w}px`;
   widgetEl.style.height = `${h}px`;
 
+  // Scale the record down proportionally when the widget is small so it never
+  // exceeds the widget height. Capped at zoom=1 so it never grows beyond
+  // its base 272px (prevents overlap with left-pane controls at large scales).
+  const recordEl = document.getElementById('record');
+  let recordHalfW = 136; // fallback
+  if (recordEl) {
+    const maxRecordH = baseH - 16; // 8px breathing room top + bottom
+    const recordZoom = Math.max(0.5, Math.min(1, maxRecordH / 272));
+    recordEl.style.zoom = String(recordZoom);
+    // Compute half-width from zoom directly — do NOT read offsetWidth here.
+    // When the deck is display:none (mini/mini-lid modes), offsetWidth = 0
+    // and would corrupt --record-right-* vars, causing a 1-second slide
+    // animation from the wrong position when the record first becomes visible.
+    recordHalfW = Math.round(136 * recordZoom);
+  }
   // Record position as fixed pixel distances from the widget's right edge.
   // The widget is right-anchored (right: 18px), so its right edge never moves
   // during width transitions — right:Xpx on the record stays screen-stable.
-  const recordEl = document.getElementById('record');
-  const recordHalfW = recordEl ? Math.round(recordEl.offsetWidth / 2) : 136;
   document.documentElement.style.setProperty('--record-right-full', `${Math.round(baseW / 2) - recordHalfW}px`);
   document.documentElement.style.setProperty('--record-right-lid',  `${Math.round(lidW * 0.49) - recordHalfW}px`);
 }
@@ -955,9 +969,12 @@ function onWidgetMouseUp(ev) {
 function onResizeHandleMouseDown(ev) {
   if (ev.button !== 0) return;
   if (!widgetEl) return;
-  const rect = widgetEl.getBoundingClientRect();
   resizeStartX = ev.clientX;
-  resizeStartWidth = rect.width;
+  resizeStartY = ev.clientY;
+  // Use the logical full-view equivalent width, not the current visual width.
+  // Without this, mini/lid views start at rect.width (e.g. 300px) which is
+  // below MIN_SCALE, causing the widget to jump or feel unresponsive.
+  resizeStartWidth = Math.round(uiState.baseWidth * uiState.scale);
   resizing = true;
   setWidgetInteractive(true);
   ev.preventDefault();
@@ -966,8 +983,13 @@ function onResizeHandleMouseDown(ev) {
 
 function onResizeHandleMouseMove(ev) {
   if (!resizing || !widgetEl) return;
-  const delta = ev.clientX - resizeStartX;
-  const desiredW = resizeStartWidth + delta;
+  const dx = ev.clientX - resizeStartX;
+  const dy = ev.clientY - resizeStartY;
+  // Project drag onto the widget's natural 2:1 diagonal.
+  // Pure horizontal: full response. Pure vertical: half response.
+  // Dragging exactly along the widget diagonal (2px right, 1px down) = full response.
+  const combined = dx + dy * 0.5;
+  const desiredW = resizeStartWidth + combined;
   const ratio = clampScale(desiredW / uiState.baseWidth);
   if (Math.abs(ratio - uiState.scale) < 0.001) return;
   uiState.scale = ratio;

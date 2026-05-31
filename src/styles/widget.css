@@ -26,6 +26,9 @@
 
 #widget[data-transitioning="true"] {
   overflow: visible; /* Allow record to extend beyond shrinking right edge during animation */
+  /* clip-path clips top/bottom shadow bleed from the record (box-shadow can escape
+     when overflow:visible) while still allowing horizontal overflow for the record. */
+  clip-path: inset(0 -999px 0 -999px);
   transition: width var(--shelf-duration) var(--drawer-ease), box-shadow var(--shelf-duration) ease;
 }
 

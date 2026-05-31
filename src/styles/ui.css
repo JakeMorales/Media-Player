@@ -85,18 +85,19 @@
 
 #resizeHandle {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 16px;
-  height: 16px;
+  right: 3px;
+  bottom: 3px;
+  width: 22px;
+  height: 22px;
   z-index: 35;
   cursor: nwse-resize;
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms ease;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0) 46%, rgba(176, 196, 220, 0.82) 46% 55%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0) 58%, rgba(176, 196, 220, 0.72) 58% 66%, rgba(255, 255, 255, 0) 66%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0) 42%, rgba(176, 196, 220, 0.86) 42% 52%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0) 55%, rgba(176, 196, 220, 0.74) 55% 64%, rgba(255, 255, 255, 0) 64%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0) 68%, rgba(176, 196, 220, 0.60) 68% 76%, rgba(255, 255, 255, 0) 76%);
 }
 
 #widget[data-resize-hint="true"] #resizeHandle {

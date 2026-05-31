@@ -27,7 +27,7 @@
   transform: translateX(0) scale(1);
   /* Transform is handled exclusively by recordClose/recordOpen animations */
   /* Open direction: no delay, record moves immediately as shelf expands */
-  transition: right 500ms var(--drawer-ease);
+  transition: right 500ms var(--drawer-ease), box-shadow 280ms ease;
 }
 
 #widget[data-view="lid"] #record {
@@ -35,9 +35,11 @@
   /* Resting sleeve position — must match recordClose 'to' and recordOpen 'from' */
   transform: scale(0.93) translateX(8px);
   /* 400ms delay: wiggle phase ends just as the slide begins */
-  transition: right 600ms var(--drawer-ease) 400ms;
+  transition: right 600ms var(--drawer-ease) 400ms, box-shadow 280ms ease;
   /* Behind rightPane (z-index 4) — glass overlay covers from above */
   z-index: 3;
+  /* Shadow not needed in lid state — record is behind rightPane */
+  box-shadow: none;
 }
 
 #record::before {

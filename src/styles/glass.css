@@ -144,9 +144,7 @@
 #widget[data-view="lid"] #leftPane {
   opacity: 0;
   pointer-events: none;
-  /* Slide right under the album art, fade simultaneously with shelf */
-  transform: translateX(140px);
-  transition: opacity 200ms ease, transform var(--shelf-duration) var(--drawer-ease);
+  transition: opacity 200ms ease;
 }
 
 #widget[data-view="lid"] #meta,
