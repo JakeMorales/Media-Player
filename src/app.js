@@ -818,9 +818,10 @@ function toggleCompactMode() {
   updateGlassSpectrumGeometry(true);
   if (widgetEl) {
     widgetEl.dataset.transitioning = 'true';
-    // Close → lid: 1050ms covers recordClose (1000ms) + right transition (400ms delay + 600ms = 1000ms)
+    // Close → lid: 1650ms covers recordClose (880ms) + right transition (1000ms)
+    //   + glint sweep (900ms delay + 600ms duration = 1500ms) with 150ms buffer.
     // Open → full: 600ms covers recordOpen (500ms) + right transition (500ms)
-    const transTimeout = compactMode ? 1050 : 600;
+    const transTimeout = compactMode ? 1650 : 600;
     setTimeout(() => {
       if (widgetEl) widgetEl.dataset.transitioning = 'false';
       isTransitioning = false;

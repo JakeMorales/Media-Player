@@ -5,8 +5,12 @@
 /* ── Record spin ── */
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  /* Use the CSS `rotate` individual-transform property instead of
+     transform:rotate() so this animation never overrides the
+     transform property set by recordClose / the lid CSS rule.
+     Both can apply simultaneously without conflict. */
+  from { rotate: 0deg; }
+  to   { rotate: 360deg; }
 }
 
 /* ── Record burn glow ── */
@@ -104,17 +108,50 @@
 
 /* Linear overall — each phase's easing is defined per-keyframe above */
 #widget[data-view="lid"][data-transitioning="true"] #record {
-  animation: recordClose 1000ms linear 1 both;
+  animation: recordClose 880ms linear 1 both;
   /* z-index 3: stays behind rightPane (z-index 4) so the record
      slides INTO the sleeve, not over the top of it */
   z-index: 3;
 }
 
 #widget[data-view="lid"][data-transitioning="true"] #sleeveSlot {
-  animation: slotReveal 1000ms ease-out 1 both;
+  animation: slotReveal 880ms ease-out 1 both;
 }
 
 #widget[data-view="full"][data-transitioning="true"] #record {
   animation: recordOpen 500ms linear 1 both;
   z-index: 3;
+}
+
+/* ── Holographic glint (close: art → glass) ── */
+
+@keyframes glintSweep {
+  /* translateX uses the element's own width (44px) as the percentage base.
+     -110% puts the stripe just off the left edge;
+     760% puts it just off the right edge of the 300px sleeve. */
+  0%   { transform: translateX(-110%) skewX(12deg); opacity: 0; }
+  10%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(760%) skewX(12deg); opacity: 0; }
+}
+
+/* Repurposes #sleeve::before (normally the left-edge shadow strip, opacity:0
+   in lid view) as a diagonal light sweep across the art as it turns to glass. */
+#widget[data-view="lid"][data-transitioning="true"] #sleeve::before {
+  left: 0;
+  top: -30px;    /* extend past sleeve edges so skew never shows a gap */
+  bottom: -30px;
+  width: 44px;
+  background: linear-gradient(
+    to right,
+    transparent                  0%,
+    rgba(168, 218, 255, 0.16)   20%,  /* ice-blue leading edge */
+    rgba(255, 255, 255, 0.72)   50%,  /* bright white peak */
+    rgba(255, 222, 148, 0.16)   80%,  /* warm gold trailing edge */
+    transparent                 100%
+  );
+  opacity: 0;        /* animation controls actual opacity via keyframes */
+  z-index: 10;       /* above sleeve::after highlights (z-index: 6) */
+  transition: none;  /* prevent base opacity transition from interfering */
+  animation: glintSweep 600ms linear 900ms both;
 }

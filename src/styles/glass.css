@@ -193,8 +193,14 @@
 
 #widget[data-view="lid"] #sleeveArt {
   opacity: 0;
-  /* Art disappears after the record is fully inserted */
-  transition: opacity 500ms var(--drawer-ease) 900ms;
+  /* Art mutes and softens like glass diffusion — no brightness boost;
+     the glint sweep provides the bright reflective moment separately. */
+  filter: saturate(0.2) contrast(0.68) blur(1.2px);
+  transform: scale(1.015);
+  transition:
+    filter    680ms ease                 900ms,
+    transform 750ms var(--drawer-ease)   900ms,
+    opacity   560ms ease-in             1000ms;
 }
 
 /* Suppress all hover-triggered glass elements while the close animation is running */
