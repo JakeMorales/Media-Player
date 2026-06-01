@@ -2,6 +2,15 @@
    animations.css — All @keyframes definitions and animation triggers
    ============================================================ */
 
+/* Five independent registered properties — one per burn-hole group.
+   Each group has its own easing/duration so holes appear at staggered rates,
+   producing an organic spread from two ignition clusters outward. */
+@property --brn-a { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@property --brn-b { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@property --brn-c { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@property --brn-d { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@property --brn-e { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+
 /* ── Record spin ── */
 
 @keyframes spin {
@@ -13,13 +22,27 @@
   to   { rotate: 360deg; }
 }
 
+/* ── Multi-spot burn mask for track-change art transition ── */
+
+/* Each keyframe only needs to animate its own variable.
+   The easing and duration live on the animation shorthand in record.css. */
+@keyframes brn-a { from { --brn-a: 0%; } to { --brn-a: 100%; } }
+@keyframes brn-b { from { --brn-b: 0%; } to { --brn-b: 100%; } }
+@keyframes brn-c { from { --brn-c: 0%; } to { --brn-c: 100%; } }
+@keyframes brn-d { from { --brn-d: 0%; } to { --brn-d: 100%; } }
+@keyframes brn-e { from { --brn-e: 0%; } to { --brn-e: 100%; } }
+
 /* ── Record burn glow ── */
 
 @keyframes recordBurn {
-  0% { opacity: 0; transform: scale(0.88); filter: blur(0.5px); }
-  20% { opacity: 0.78; transform: scale(1.02); filter: blur(1.2px); }
-  65% { opacity: 0.42; transform: scale(1.07); filter: blur(1.6px); }
-  100% { opacity: 0; transform: scale(1.12); filter: blur(1.8px); }
+  /* Ambient heat shimmer — lower opacity so it doesn't flash white.
+     The real burning effect is the mask-image on #recordArt. */
+  0%   { opacity: 0;    transform: scale(0.10); filter: blur(0px);   }
+  5%   { opacity: 0.40; transform: scale(0.16); filter: blur(0px);   }
+  22%  { opacity: 0.34; transform: scale(0.65); filter: blur(1px);   }
+  50%  { opacity: 0.18; transform: scale(1.04); filter: blur(2px);   }
+  78%  { opacity: 0.08; transform: scale(1.14); filter: blur(3.5px); }
+  100% { opacity: 0;    transform: scale(1.24); filter: blur(5px);   }
 }
 
 /*

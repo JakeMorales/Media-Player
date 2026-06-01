@@ -94,6 +94,12 @@
   object-fit: cover;
   display: block;
   filter: saturate(1.04) contrast(1.04);
+  transition: opacity 220ms ease;
+}
+
+#miniArt[data-changing="true"] {
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 
 #miniSpectrum {

@@ -81,6 +81,18 @@
 
 /* ── Album art on record ── */
 
+/* Under-layer: shows new art through the burn holes in #recordArt */
+#recordArtNew {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+  filter: saturate(1.08) contrast(1.06);
+  pointer-events: none;
+}
+
 #recordArt {
   width: 100%;
   height: 100%;
@@ -91,6 +103,58 @@
   transform: scale(1) translateX(0);
   transform-origin: center;
   transition: transform var(--drawer-duration) var(--drawer-ease), filter var(--drawer-duration) var(--drawer-ease);
+}
+
+/* Burn-in-pieces mask: 25 holes across 5 groups — organic fire eating paper.
+   Two ignition clusters (center-left & upper-right) spread outward to the edges.
+   Varied hole sizes (large central burns → tiny edge sparks) and 5 independent
+   timing curves prevent any symmetric or mechanical look.
+   Group A: 5 holes, fast ignition center-left (ease-out 550ms)
+   Group B: 5 holes, upper-right ignition (ease-in 800ms)
+   Group C: 5 holes, left/bottom spread, delayed burst (cubic-bezier 720ms + 100ms)
+   Group D: 5 holes, right/bottom-right spread (ease-in-out 660ms)
+   Group E: 5 holes, straggler edge smolders (ease-in 880ms + 50ms)
+   mask-composite:intersect = pixel hidden where ANY hole is transparent.
+   Dark-brown rgba() ring on each hole edge = charred paper. */
+#recordArt[data-burning="true"] {
+  animation:
+    brn-a 550ms ease-out forwards,
+    brn-b 800ms ease-in forwards,
+    brn-c 720ms cubic-bezier(0.65, 0, 0.15, 1) 100ms forwards,
+    brn-d 660ms ease-in-out forwards,
+    brn-e 880ms ease-in 50ms forwards;
+  mask-image:
+    /* ─ Group A: fast ignition — center-left cluster ─ */
+    radial-gradient(circle at 43% 48%, transparent 0 calc(var(--brn-a)*0.56), rgba(14,5,0,0.74) calc(var(--brn-a)*0.56) calc(var(--brn-a)*0.65), white calc(var(--brn-a)*0.65)),
+    radial-gradient(circle at 36% 40%, transparent 0 calc(var(--brn-a)*0.44), rgba(14,6,0,0.70) calc(var(--brn-a)*0.44) calc(var(--brn-a)*0.52), white calc(var(--brn-a)*0.52)),
+    radial-gradient(circle at 50% 56%, transparent 0 calc(var(--brn-a)*0.48), rgba(13,5,0,0.72) calc(var(--brn-a)*0.48) calc(var(--brn-a)*0.56), white calc(var(--brn-a)*0.56)),
+    radial-gradient(circle at 30% 60%, transparent 0 calc(var(--brn-a)*0.38), rgba(15,6,0,0.68) calc(var(--brn-a)*0.38) calc(var(--brn-a)*0.46), white calc(var(--brn-a)*0.46)),
+    radial-gradient(circle at 47% 33%, transparent 0 calc(var(--brn-a)*0.34), rgba(14,5,0,0.66) calc(var(--brn-a)*0.34) calc(var(--brn-a)*0.41), white calc(var(--brn-a)*0.41)),
+    /* ─ Group B: upper-right ignition cluster ─ */
+    radial-gradient(circle at 65% 22%, transparent 0 calc(var(--brn-b)*0.42), rgba(14,6,0,0.70) calc(var(--brn-b)*0.42) calc(var(--brn-b)*0.50), white calc(var(--brn-b)*0.50)),
+    radial-gradient(circle at 72% 33%, transparent 0 calc(var(--brn-b)*0.36), rgba(13,5,0,0.66) calc(var(--brn-b)*0.36) calc(var(--brn-b)*0.43), white calc(var(--brn-b)*0.43)),
+    radial-gradient(circle at 57% 30%, transparent 0 calc(var(--brn-b)*0.32), rgba(12,5,0,0.64) calc(var(--brn-b)*0.32) calc(var(--brn-b)*0.39), white calc(var(--brn-b)*0.39)),
+    radial-gradient(circle at 68% 44%, transparent 0 calc(var(--brn-b)*0.40), rgba(14,6,0,0.68) calc(var(--brn-b)*0.40) calc(var(--brn-b)*0.48), white calc(var(--brn-b)*0.48)),
+    radial-gradient(circle at 79% 20%, transparent 0 calc(var(--brn-b)*0.26), rgba(12,5,0,0.62) calc(var(--brn-b)*0.26) calc(var(--brn-b)*0.33), white calc(var(--brn-b)*0.33)),
+    /* ─ Group C: left/bottom spread — delayed burst ─ */
+    radial-gradient(circle at 22% 27%, transparent 0 calc(var(--brn-c)*0.40), rgba(14,6,0,0.68) calc(var(--brn-c)*0.40) calc(var(--brn-c)*0.48), white calc(var(--brn-c)*0.48)),
+    radial-gradient(circle at 14% 46%, transparent 0 calc(var(--brn-c)*0.34), rgba(13,5,0,0.66) calc(var(--brn-c)*0.34) calc(var(--brn-c)*0.41), white calc(var(--brn-c)*0.41)),
+    radial-gradient(circle at 27% 68%, transparent 0 calc(var(--brn-c)*0.38), rgba(15,6,0,0.68) calc(var(--brn-c)*0.38) calc(var(--brn-c)*0.46), white calc(var(--brn-c)*0.46)),
+    radial-gradient(circle at 18% 63%, transparent 0 calc(var(--brn-c)*0.30), rgba(12,5,0,0.64) calc(var(--brn-c)*0.30) calc(var(--brn-c)*0.37), white calc(var(--brn-c)*0.37)),
+    radial-gradient(circle at 38% 76%, transparent 0 calc(var(--brn-c)*0.44), rgba(14,5,0,0.70) calc(var(--brn-c)*0.44) calc(var(--brn-c)*0.52), white calc(var(--brn-c)*0.52)),
+    /* ─ Group D: right/bottom-right spread ─ */
+    radial-gradient(circle at 76% 66%, transparent 0 calc(var(--brn-d)*0.40), rgba(14,6,0,0.68) calc(var(--brn-d)*0.40) calc(var(--brn-d)*0.48), white calc(var(--brn-d)*0.48)),
+    radial-gradient(circle at 83% 53%, transparent 0 calc(var(--brn-d)*0.32), rgba(13,5,0,0.64) calc(var(--brn-d)*0.32) calc(var(--brn-d)*0.39), white calc(var(--brn-d)*0.39)),
+    radial-gradient(circle at 63% 73%, transparent 0 calc(var(--brn-d)*0.36), rgba(14,6,0,0.66) calc(var(--brn-d)*0.36) calc(var(--brn-d)*0.43), white calc(var(--brn-d)*0.43)),
+    radial-gradient(circle at 86% 35%, transparent 0 calc(var(--brn-d)*0.26), rgba(12,5,0,0.62) calc(var(--brn-d)*0.26) calc(var(--brn-d)*0.33), white calc(var(--brn-d)*0.33)),
+    radial-gradient(circle at 55% 83%, transparent 0 calc(var(--brn-d)*0.34), rgba(13,5,0,0.66) calc(var(--brn-d)*0.34) calc(var(--brn-d)*0.41), white calc(var(--brn-d)*0.41)),
+    /* ─ Group E: straggler edge smolders ─ */
+    radial-gradient(circle at 10% 18%, transparent 0 calc(var(--brn-e)*0.24), rgba(12,5,0,0.62) calc(var(--brn-e)*0.24) calc(var(--brn-e)*0.31), white calc(var(--brn-e)*0.31)),
+    radial-gradient(circle at 89% 74%, transparent 0 calc(var(--brn-e)*0.22), rgba(11,4,0,0.60) calc(var(--brn-e)*0.22) calc(var(--brn-e)*0.28), white calc(var(--brn-e)*0.28)),
+    radial-gradient(circle at 52% 13%, transparent 0 calc(var(--brn-e)*0.26), rgba(12,5,0,0.62) calc(var(--brn-e)*0.26) calc(var(--brn-e)*0.33), white calc(var(--brn-e)*0.33)),
+    radial-gradient(circle at 9%  79%, transparent 0 calc(var(--brn-e)*0.24), rgba(11,4,0,0.60) calc(var(--brn-e)*0.24) calc(var(--brn-e)*0.30), white calc(var(--brn-e)*0.30)),
+    radial-gradient(circle at 91% 28%, transparent 0 calc(var(--brn-e)*0.22), rgba(11,4,0,0.60) calc(var(--brn-e)*0.22) calc(var(--brn-e)*0.28), white calc(var(--brn-e)*0.28));
+  mask-composite: intersect;
 }
 
 #recordLabel,

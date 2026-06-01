@@ -52,7 +52,17 @@ const pinBtnEl = document.getElementById('pinBtn');
 const rightPaneEl = document.getElementById('rightPane');
 const recordEl = document.getElementById('record');
 const sleeveArtEl = document.getElementById('sleeveArt');
+const sleeveArtNewEl = document.getElementById('sleeveArtNew');
 const recordArtEl = document.getElementById('recordArt');
+const recordArtNewEl = document.getElementById('recordArtNew');
+// Incremented on every track change — lets stale async closures detect they've been superseded.
+let _artBurnGen = 0;
+// Debounce timer: we wait a short time after isNewTrack before starting the animation,
+// so rapid skips only trigger one transition (for the track the user settled on).
+let _transDebounce = null;
+// Track key we are holding for — set when a new track arrives without artwork yet.
+// Cleared and animated when artwork for that key arrives in a later setMetadata call.
+let _pendingArtKey = null;
 const glassSpectrumEl = document.getElementById('glassSpectrum');
 const labelTitleEl = document.getElementById('labelTitle');
 const labelArtistEl = document.getElementById('labelArtist');
@@ -1500,6 +1510,104 @@ function updatePlaybackProgress(nowMs) {
   rootStyle.setProperty('--tonearm-sway', `${sway.toFixed(2)}deg`);
 }
 
+// Runs the full record-burn + sleeve-dissolve + mini-fade transition.
+// Called once we have confirmed artwork for the incoming track.
+function _doArtTransition(meta) {
+  const gen = ++_artBurnGen;
+
+  // ── Record art ───────────────────────────────────────────────────────────
+  if (recordArtEl) {
+    if (recordArtNewEl) {
+      if (meta.artwork) recordArtNewEl.src = meta.artwork;
+      else recordArtNewEl.removeAttribute('src');
+    }
+    if (!recordArtEl.dataset.burning) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (_artBurnGen !== gen) return;
+        recordArtEl.dataset.burning = 'true';
+      }));
+    }
+    setTimeout(() => {
+      if (_artBurnGen !== gen) return;
+      const finalize = () => {
+        recordArtEl.removeAttribute('data-burning');
+        requestAnimationFrame(() => {
+          if (recordArtNewEl) recordArtNewEl.removeAttribute('src');
+        });
+      };
+      if (meta.artwork) {
+        recordArtEl.src = meta.artwork;
+        const dp = recordArtEl.decode ? recordArtEl.decode() : Promise.reject();
+        dp.then(() => { if (_artBurnGen === gen) finalize(); })
+          .catch(() => { if (_artBurnGen === gen) finalize(); });
+      } else {
+        recordArtEl.removeAttribute('src');
+        finalize();
+      }
+    }, 930);
+  }
+
+  // ── Sleeve art ───────────────────────────────────────────────────────────
+  if (sleeveArtEl) {
+    if (sleeveArtNewEl) {
+      if (meta.artwork) sleeveArtNewEl.src = meta.artwork;
+      else sleeveArtNewEl.removeAttribute('src');
+      sleeveArtEl.dataset.changing = 'true';
+      const startDissolve = () => {
+        sleeveArtNewEl.onload = null;
+        sleeveArtNewEl.onerror = null;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          sleeveArtNewEl.dataset.visible = 'true';
+        }));
+        setTimeout(() => {
+          if (meta.artwork) {
+            sleeveArtEl.src = meta.artwork;
+            const finishSleeve = () => {
+              sleeveArtEl.removeAttribute('data-changing');
+              sleeveArtNewEl.removeAttribute('data-visible');
+              setTimeout(() => sleeveArtNewEl.removeAttribute('src'), 460);
+            };
+            const sd = sleeveArtEl.decode ? sleeveArtEl.decode() : Promise.reject();
+            sd.then(finishSleeve).catch(finishSleeve);
+          } else {
+            sleeveArtEl.removeAttribute('src');
+            sleeveArtEl.removeAttribute('data-changing');
+            sleeveArtNewEl.removeAttribute('data-visible');
+            sleeveArtNewEl.removeAttribute('src');
+          }
+        }, 380);
+      };
+      if (!meta.artwork || sleeveArtNewEl.complete) {
+        startDissolve();
+      } else {
+        sleeveArtNewEl.onload = startDissolve;
+        sleeveArtNewEl.onerror = startDissolve;
+      }
+    } else {
+      sleeveArtEl.dataset.changing = 'true';
+      setTimeout(() => {
+        if (meta.artwork) sleeveArtEl.src = meta.artwork;
+        else sleeveArtEl.removeAttribute('src');
+        requestAnimationFrame(() => requestAnimationFrame(() =>
+          sleeveArtEl.removeAttribute('data-changing')
+        ));
+      }, 360);
+    }
+  }
+
+  // ── Mini art ─────────────────────────────────────────────────────────────
+  if (miniArtEl) {
+    miniArtEl.dataset.changing = 'true';
+    setTimeout(() => {
+      if (meta.artwork) miniArtEl.src = meta.artwork;
+      else miniArtEl.removeAttribute('src');
+      requestAnimationFrame(() => requestAnimationFrame(() =>
+        miniArtEl.removeAttribute('data-changing')
+      ));
+    }, 200);
+  }
+}
+
 function setMetadata(meta) {
   const prevTrackKey = playbackProgressState.trackKey;
   currentMeta = {
@@ -1520,8 +1628,8 @@ function setMetadata(meta) {
   };
 
   if (artistEl) artistEl.textContent = meta.artist || 'Unknown Artist';
-  if (albumTextEl) albumTextEl.textContent = meta.album ? `Album: ${meta.album}` : 'Album unknown';
-  else if (albumEl) albumEl.textContent = meta.album ? `Album: ${meta.album}` : 'Album unknown';
+  if (albumTextEl) albumTextEl.textContent = meta.album ? `${meta.album}` : 'Album unknown';
+  else if (albumEl) albumEl.textContent = meta.album ? `${meta.album}` : 'Album unknown';
   if (titleEl) titleEl.textContent = meta.title || 'Unknown Track';
   if (glassTitleEl) glassTitleEl.textContent = meta.title || 'Unknown Track';
   if (glassArtistEl) glassArtistEl.textContent = meta.artist || 'Unknown Artist';
@@ -1533,20 +1641,53 @@ function setMetadata(meta) {
   if (labelTitleEl) labelTitleEl.textContent = fitLabelText(meta.title || 'Unknown Track', 16);
   if (labelArtistEl) labelArtistEl.textContent = fitLabelText(meta.artist || 'Unknown Artist', 16);
   applyRecordLabelTheme(meta);
-  if (sleeveArtEl) {
-    if (meta.artwork) sleeveArtEl.src = meta.artwork;
-    else sleeveArtEl.removeAttribute('src');
-  }
-  if (recordArtEl) {
-    if (meta.artwork) recordArtEl.src = meta.artwork;
-    else recordArtEl.removeAttribute('src');
-  }
-  if (miniArtEl) {
-    if (meta.artwork) miniArtEl.src = meta.artwork;
-    else miniArtEl.removeAttribute('src');
+
+  // Compute track key before touching art so we know whether to animate the swap
+  const trackKey = `${currentMeta.appId}|${currentMeta.title}|${currentMeta.artist}`;
+  const isNewTrack = !!(prevTrackKey && prevTrackKey !== trackKey);
+
+  // ── Art transition: debounced, artwork-guarded ───────────────────────────
+
+  // Artwork just arrived for a track we were holding — fire the transition now.
+  const pendingArtFired = (_pendingArtKey === trackKey) && !!meta.artwork;
+  if (pendingArtFired) _pendingArtKey = null;
+
+  if (isNewTrack) {
+    // User changed tracks — cancel any prior debounce (they may still be skipping)
+    if (_transDebounce) { clearTimeout(_transDebounce); _transDebounce = null; }
+    _pendingArtKey = null;
+
+    const capMeta = meta;
+    const capKey  = trackKey;
+    // Short wait: if the user skips again within 80 ms we restart the timer
+    // and never animate to an in-between track.
+    _transDebounce = setTimeout(() => {
+      _transDebounce = null;
+      // If the user moved on to yet another track during the debounce, bail out.
+      if (playbackProgressState.trackKey !== capKey) return;
+      if (capMeta.artwork) {
+        _doArtTransition(capMeta);
+      } else {
+        // Artwork hasn't arrived yet — hold the current display and wait.
+        _pendingArtKey = capKey;
+      }
+    }, 80);
+
+  } else if (pendingArtFired) {
+    // Artwork arrived for the held track — animate now, no debounce needed.
+    _doArtTransition(meta);
+
+  } else {
+    // Same track, plain metadata update.
+    // Only touch artwork srcs if we actually have art — never blank out a
+    // valid image while waiting for replacement art to arrive.
+    if (meta.artwork) {
+      if (sleeveArtEl) sleeveArtEl.src = meta.artwork;
+      if (recordArtEl) recordArtEl.src = meta.artwork;
+      if (miniArtEl)   miniArtEl.src   = meta.artwork;
+    }
   }
 
-  const trackKey = `${currentMeta.appId}|${currentMeta.title}|${currentMeta.artist}`;
   playbackProgressState.trackKey = trackKey;
   playbackProgressState.playing = currentMeta.playbackStatus === 'playing';
   playbackProgressState.lastTickMs = performance.now();
@@ -1557,13 +1698,6 @@ function setMetadata(meta) {
   const position = clamp(currentMeta.positionMs || 0, 0, duration);
   playbackProgressState.durationMs = duration;
   playbackProgressState.positionMs = position;
-
-  if (prevTrackKey && prevTrackKey !== trackKey && recordEl) {
-    recordEl.dataset.transition = 'burn';
-    setTimeout(() => {
-      if (recordEl) recordEl.dataset.transition = 'none';
-    }, 940);
-  }
 
   // Adapt record label line contrast based on current inferred theme brightness.
   const isDarkTheme = uiState.theme === 'dark' || uiState.theme === 'transparent';

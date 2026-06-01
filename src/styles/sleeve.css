@@ -49,7 +49,30 @@
   display: block;
   filter: saturate(1.02) contrast(1.04);
   transform: scale(1) translateX(0);
-  transition: opacity var(--drawer-duration) var(--drawer-ease), filter var(--drawer-duration) var(--drawer-ease), transform var(--drawer-duration) var(--drawer-ease);
+  transition: opacity 320ms ease, filter var(--drawer-duration) var(--drawer-ease), transform var(--drawer-duration) var(--drawer-ease);
+}
+
+/* Under-layer for cross-dissolve: fades in as old art fades out */
+#sleeveArtNew {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: saturate(1.02) contrast(1.04);
+  opacity: 0;
+  transition: opacity 450ms ease;
+}
+
+#sleeveArtNew[data-visible="true"] {
+  opacity: 1;
+}
+
+/* Gentle fade-out — no blur or desaturation, just a soft opacity melt */
+#sleeveArt[data-changing="true"] {
+  opacity: 0;
+  transition: opacity 350ms ease;
 }
 
 /* Liquid bead running down the left edge of the sleeve */

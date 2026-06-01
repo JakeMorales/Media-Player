@@ -13,8 +13,12 @@
   z-index: 9;
   mix-blend-mode: screen;
   background:
-    radial-gradient(circle at 45% 45%, rgba(255, 255, 255, 0.62), rgba(255, 193, 95, 0.44) 26%, rgba(255, 97, 26, 0.26) 46%, rgba(0, 0, 0, 0) 68%),
-    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16) 0 2px, rgba(0, 0, 0, 0) 2px 7px);
+    /* White-hot nucleus — bleaches art at center under mix-blend-mode:screen */
+    radial-gradient(circle at center, rgba(255, 255, 255, 1) 0%, rgba(255, 248, 160, 0.96) 8%, rgba(255, 168, 20, 0.78) 22%, rgba(255, 55, 0, 0.44) 40%, rgba(0, 0, 0, 0) 56%),
+    /* Ember ring — orange halo riding the burn front */
+    radial-gradient(circle at center, rgba(0, 0, 0, 0) 28%, rgba(255, 128, 10, 0.40) 40%, rgba(255, 210, 36, 0.22) 52%, rgba(0, 0, 0, 0) 64%),
+    /* Faint groove rings under the fire */
+    repeating-radial-gradient(circle at center, rgba(255, 212, 120, 0.14) 0 1.5px, rgba(0, 0, 0, 0) 1.5px 6px);
   transform: scale(0.92);
 }
 
