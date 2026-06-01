@@ -44,6 +44,8 @@ const btnMiniCollapseEl = document.getElementById('btnMiniCollapse');
 const btnSettingsEl = document.getElementById('btnSettings');
 const settingsPanelEl = document.getElementById('settingsPanel');
 const themeSelectEl = document.getElementById('themeSelect');
+const recordSelectEl = document.getElementById('recordSelect');
+const recordLidSelectEl = document.getElementById('recordLidSelect');
 const scaleSliderEl = document.getElementById('scaleSlider');
 const clearGlassToggleEl = document.getElementById('clearGlassToggle');
 const launchToggleEl = document.getElementById('launchToggle');
@@ -98,6 +100,8 @@ const uiState = {
   theme: 'light',
   clearGlass: true
 };
+uiState.recordStyle = 'album';
+uiState.recordStyleLid = 'album';
 let currentMeta = {
   appId: '',
   title: '',
@@ -129,6 +133,28 @@ const SOURCE_PRESETS = {
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
+if (recordSelectEl) {
+  recordSelectEl.querySelectorAll('.recordPill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.value === uiState.recordStyle);
+    pill.addEventListener('click', () => {
+      uiState.recordStyle = pill.dataset.value;
+      applyRecordStyles();
+      saveSettings();
+      recordSelectEl.querySelectorAll('.recordPill').forEach(p => p.classList.toggle('active', p === pill));
+    });
+  });
+}
+if (recordLidSelectEl) {
+  recordLidSelectEl.querySelectorAll('.recordPill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.value === uiState.recordStyleLid);
+    pill.addEventListener('click', () => {
+      uiState.recordStyleLid = pill.dataset.value;
+      applyRecordStyles();
+      saveSettings();
+      recordLidSelectEl.querySelectorAll('.recordPill').forEach(p => p.classList.toggle('active', p === pill));
+    });
+  });
+}
 
 function clampScale(value) {
   return clamp(value, MIN_SCALE, MAX_SCALE);
@@ -148,6 +174,20 @@ function applyTheme(theme) {
       pill.classList.toggle('active', pill.dataset.value === theme);
     });
   }
+  applyRecordStyles();
+}
+
+function applyRecordStyles() {
+  if (!widgetEl) return;
+  widgetEl.dataset.recordStyle = uiState.recordStyle || 'album';
+  widgetEl.dataset.recordStyleLid = uiState.recordStyleLid || 'album';
+  // ensure record DOM updates: hide/show album art when appropriate
+  if (recordArtEl) {
+    const activeRecord = (currentView === 'lid' || currentView === 'mini-lid') ? uiState.recordStyleLid : uiState.recordStyle;
+    const showAlbum = (activeRecord || 'album') === 'album';
+    recordArtEl.style.opacity = showAlbum ? '1' : '0';
+    recordArtNewEl.style.opacity = showAlbum ? '1' : '0';
+  }
 }
 
 function applyGlassClarity(enabled) {
@@ -162,6 +202,8 @@ function saveSettings() {
     localStorage.setItem('mp_scale', String(uiState.scale));
     localStorage.setItem('mp_clearGlass', String(uiState.clearGlass));
     localStorage.setItem('mp_miniMode', String(isMini));
+    localStorage.setItem('mp_record_expanded', uiState.recordStyle || 'album');
+    localStorage.setItem('mp_record_lid', uiState.recordStyleLid || 'album');
   } catch {}
 }
 
@@ -179,6 +221,11 @@ function loadSettings() {
 
     const miniMode = localStorage.getItem('mp_miniMode');
     if (miniMode !== null) uiState.miniMode = miniMode === 'true';
+    const recordExp = localStorage.getItem('mp_record_expanded');
+    const validRecords = ['album','black','white','transparent'];
+    if (recordExp && validRecords.includes(recordExp)) uiState.recordStyle = recordExp;
+    const recordLid = localStorage.getItem('mp_record_lid');
+    if (recordLid && validRecords.includes(recordLid)) uiState.recordStyleLid = recordLid;
   } catch {}
 }
 
@@ -187,6 +234,7 @@ function setCurrentView(view) {
   compactMode = isLidLikeView(view);
   if (widgetEl) widgetEl.dataset.view = view;
   if (miniModeToggleEl) miniModeToggleEl.checked = view === 'mini' || view === 'mini-lid';
+  applyRecordStyles();
 }
 
 function setSettingsOpen(open) {
