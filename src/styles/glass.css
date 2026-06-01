@@ -211,3 +211,97 @@
   pointer-events: none;
   transition: none;
 }
+
+/* ── Theme overrides — glass text & menus ── */
+
+/* Dark */
+#widget[data-theme="dark"] #glassTitle {
+  color: rgba(220, 238, 255, 0.96);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+#widget[data-theme="dark"] #glassArtist {
+  color: rgba(190, 218, 248, 0.92);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+#widget[data-theme="dark"] #glassAlbum {
+  color: rgba(160, 195, 232, 0.88);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.32);
+}
+#widget[data-theme="dark"] #glassQuickMenu {
+  background: linear-gradient(160deg, rgba(28, 38, 54, 0.92), rgba(18, 28, 44, 0.84));
+  border-color: rgba(80, 110, 150, 0.36);
+}
+#widget[data-theme="dark"] .quickItem {
+  color: rgba(200, 222, 248, 0.95);
+}
+#widget[data-theme="dark"] .quickItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Cream */
+#widget[data-theme="cream"] #glassTitle {
+  color: rgba(52, 36, 14, 0.96);
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.5);
+}
+#widget[data-theme="cream"] #glassArtist {
+  color: rgba(76, 54, 22, 0.92);
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.42);
+}
+#widget[data-theme="cream"] #glassAlbum {
+  color: rgba(100, 72, 30, 0.88);
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.38);
+}
+#widget[data-theme="cream"] #glassQuickMenu {
+  background: linear-gradient(160deg, rgba(255, 248, 232, 0.88), rgba(236, 220, 192, 0.76));
+  border-color: rgba(157, 130, 88, 0.36);
+}
+#widget[data-theme="cream"] .quickItem {
+  color: rgba(52, 36, 14, 0.95);
+}
+
+/* Pastel */
+#widget[data-theme="pastel"] #glassTitle {
+  color: rgba(22, 38, 72, 0.96);
+  text-shadow: 0 1px 0 rgba(240, 248, 255, 0.5);
+}
+#widget[data-theme="pastel"] #glassArtist {
+  color: rgba(36, 58, 100, 0.92);
+  text-shadow: 0 1px 0 rgba(240, 248, 255, 0.42);
+}
+#widget[data-theme="pastel"] #glassAlbum {
+  color: rgba(52, 76, 120, 0.88);
+  text-shadow: 0 1px 0 rgba(240, 248, 255, 0.38);
+}
+#widget[data-theme="pastel"] #glassQuickMenu {
+  background: linear-gradient(160deg, rgba(234, 246, 255, 0.88), rgba(200, 224, 248, 0.76));
+  border-color: rgba(100, 140, 200, 0.34);
+}
+#widget[data-theme="pastel"] .quickItem {
+  color: rgba(22, 38, 72, 0.95);
+}
+
+/* Transparent */
+#widget[data-theme="transparent"] #glassTitle {
+  color: rgba(220, 238, 255, 0.96);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+#widget[data-theme="transparent"] #glassArtist {
+  color: rgba(190, 218, 248, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+#widget[data-theme="transparent"] #glassAlbum {
+  color: rgba(160, 195, 232, 0.88);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.42);
+}
+#widget[data-theme="transparent"] #glassQuickMenu {
+  background: linear-gradient(160deg, rgba(12, 22, 38, 0.82), rgba(8, 16, 30, 0.72));
+  border-color: rgba(120, 170, 220, 0.28);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+}
+#widget[data-theme="transparent"] .quickItem {
+  color: rgba(200, 222, 248, 0.95);
+}
+#widget[data-theme="transparent"] .quickItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

@@ -155,16 +155,19 @@
       </div>
     </div>
     <div id="settingsPanel" aria-hidden="true" data-open="false">
-      <div class="settingsRow">
-        <label for="themeSelect">Theme</label>
-        <select id="themeSelect">
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-          <option value="cream">Cream</option>
-          <option value="pastel">Pastel</option>
-          <option value="transparent">Transparent</option>
-        </select>
+      <div id="settingsHeader">⚙ SETTINGS</div>
+      <div class="settingsDivider"></div>
+      <div class="settingsRow settingsRow--theme">
+        <label>Theme</label>
+        <div id="themeSelect" class="themePills">
+          <button class="themePill" data-value="light" type="button">Light</button>
+          <button class="themePill" data-value="dark" type="button">Dark</button>
+          <button class="themePill" data-value="cream" type="button">Cream</button>
+          <button class="themePill" data-value="pastel" type="button">Pastel</button>
+          <button class="themePill" data-value="transparent" type="button">Trans</button>
+        </div>
       </div>
+      <div class="settingsDivider"></div>
       <div class="settingsRow">
         <label for="scaleSlider">Scale</label>
         <input id="scaleSlider" type="range" min="70" max="135" step="1" value="100">
@@ -181,6 +184,7 @@
         <label for="miniModeToggle">Mini Mode</label>
         <input id="miniModeToggle" type="checkbox">
       </div>
+      <div class="settingsDivider"></div>
       <div class="settingsRow">
         <button id="btnCloseApp" class="settingsAction" type="button">Close App</button>
       </div>

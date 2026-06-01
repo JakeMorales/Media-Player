@@ -1,8 +1,14 @@
-const cfg        = require('./config');
+const cfg            = require('./config');
 const { initAudio }      = require('./audio');
 const { initRenderer }   = require('./renderer');
 const { initVisualizer } = require('./visualizer');
 const { ipcRenderer, shell }    = require('electron');
+
+const labelTheme     = require('./label-theme');
+const artTransition  = require('./art-transition');
+const spectrumCanvas = require('./spectrum-canvas');
+const volumeControl  = require('./volume-control');
+const transport      = require('./transport');
 
 const statusEl = document.getElementById('status');
 const widgetEl = document.getElementById('widget');
@@ -55,14 +61,6 @@ const sleeveArtEl = document.getElementById('sleeveArt');
 const sleeveArtNewEl = document.getElementById('sleeveArtNew');
 const recordArtEl = document.getElementById('recordArt');
 const recordArtNewEl = document.getElementById('recordArtNew');
-// Incremented on every track change — lets stale async closures detect they've been superseded.
-let _artBurnGen = 0;
-// Debounce timer: we wait a short time after isNewTrack before starting the animation,
-// so rapid skips only trigger one transition (for the track the user settled on).
-let _transDebounce = null;
-// Track key we are holding for — set when a new track arrives without artwork yet.
-// Cleared and animated when artwork for that key arrives in a later setMetadata call.
-let _pendingArtKey = null;
 const glassSpectrumEl = document.getElementById('glassSpectrum');
 const labelTitleEl = document.getElementById('labelTitle');
 const labelArtistEl = document.getElementById('labelArtist');
@@ -100,16 +98,6 @@ const uiState = {
   theme: 'light',
   clearGlass: true
 };
-const volumeControlState = {
-  volume: 0.5,
-  dragging: false,
-  startY: 0,
-  startVolume: 0,
-  commitTimer: null,
-  sourceLabel: 'Unknown Source',
-  muted: false,
-  lastAudibleVolume: 0.5
-};
 let currentMeta = {
   appId: '',
   title: '',
@@ -138,40 +126,6 @@ const SOURCE_PRESETS = {
   unknown: { id: 'unknown', label: 'Unknown Source', accent: '#7c8ea6' }
 };
 
-const labelThemeCache = new Map();
-let labelThemeToken = 0;
-
-const fallbackLabelPalettes = [
-  { base: [246, 223, 24], ring: [215, 72, 54], panel: [255, 248, 216], ink: [20, 24, 35] },
-  { base: [242, 97, 52], ring: [171, 40, 42], panel: [255, 237, 224], ink: [26, 18, 20] },
-  { base: [85, 163, 221], ring: [52, 94, 176], panel: [233, 244, 255], ink: [17, 28, 46] },
-  { base: [77, 176, 121], ring: [44, 112, 73], panel: [233, 248, 237], ink: [16, 32, 23] },
-  { base: [231, 181, 66], ring: [148, 83, 38], panel: [255, 243, 214], ink: [34, 24, 13] }
-];
-
-const spectrumState = {
-  ctx: glassSpectrumEl ? glassSpectrumEl.getContext('2d') : null,
-  width: 0,
-  height: 0,
-  dpr: 1,
-  centerX: 0,
-  centerY: 0,
-  recordRadius: 0,
-  levels: new Float32Array(64),
-  bass: 0,
-  idlePhase: 0,
-  geomStamp: ''
-};
-
-const miniSpectrumState = {
-  ctx: miniSpectrumEl ? miniSpectrumEl.getContext('2d') : null,
-  width: 0,
-  height: 0,
-  dpr: 1,
-  levels: new Float32Array(24),
-  phase: 0
-};
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -189,11 +143,43 @@ function applyTheme(theme) {
   if (widgetEl) {
     widgetEl.dataset.theme = theme;
   }
+  if (themeSelectEl) {
+    themeSelectEl.querySelectorAll('.themePill').forEach(pill => {
+      pill.classList.toggle('active', pill.dataset.value === theme);
+    });
+  }
 }
 
 function applyGlassClarity(enabled) {
   uiState.clearGlass = !!enabled;
   rootStyle.setProperty('--glass-clarity', enabled ? '0.28' : '0.72');
+}
+
+function saveSettings() {
+  try {
+    const isMini = currentView === 'mini' || currentView === 'mini-lid';
+    localStorage.setItem('mp_theme', uiState.theme);
+    localStorage.setItem('mp_scale', String(uiState.scale));
+    localStorage.setItem('mp_clearGlass', String(uiState.clearGlass));
+    localStorage.setItem('mp_miniMode', String(isMini));
+  } catch {}
+}
+
+function loadSettings() {
+  try {
+    const theme = localStorage.getItem('mp_theme');
+    const validThemes = ['light', 'dark', 'cream', 'pastel', 'transparent'];
+    if (theme && validThemes.includes(theme)) uiState.theme = theme;
+
+    const scale = parseFloat(localStorage.getItem('mp_scale'));
+    if (Number.isFinite(scale)) uiState.scale = clampScale(scale);
+
+    const clearGlass = localStorage.getItem('mp_clearGlass');
+    if (clearGlass !== null) uiState.clearGlass = clearGlass !== 'false';
+
+    const miniMode = localStorage.getItem('mp_miniMode');
+    if (miniMode !== null) uiState.miniMode = miniMode === 'true';
+  } catch {}
 }
 
 function setCurrentView(view) {
@@ -217,186 +203,6 @@ function setQuickMenuOpen(open) {
     glassQuickMenuEl.dataset.open = quickMenuOpen ? 'true' : 'false';
     glassQuickMenuEl.setAttribute('aria-hidden', quickMenuOpen ? 'false' : 'true');
   }
-}
-
-function hashString(value) {
-  let h = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function rgbToHsl(r, g, b) {
-  const rn = r / 255;
-  const gn = g / 255;
-  const bn = b / 255;
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const d = max - min;
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
-
-  if (d !== 0) {
-    s = d / (1 - Math.abs(2 * l - 1));
-    switch (max) {
-      case rn: h = ((gn - bn) / d) % 6; break;
-      case gn: h = ((bn - rn) / d) + 2; break;
-      default: h = ((rn - gn) / d) + 4; break;
-    }
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return [h, s, l];
-}
-
-function hslToRgb(h, s, l) {
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const hp = h / 60;
-  const x = c * (1 - Math.abs((hp % 2) - 1));
-  let r1 = 0;
-  let g1 = 0;
-  let b1 = 0;
-
-  if (hp >= 0 && hp < 1) [r1, g1, b1] = [c, x, 0];
-  else if (hp < 2) [r1, g1, b1] = [x, c, 0];
-  else if (hp < 3) [r1, g1, b1] = [0, c, x];
-  else if (hp < 4) [r1, g1, b1] = [0, x, c];
-  else if (hp < 5) [r1, g1, b1] = [x, 0, c];
-  else [r1, g1, b1] = [c, 0, x];
-
-  const m = l - c / 2;
-  return [
-    Math.round((r1 + m) * 255),
-    Math.round((g1 + m) * 255),
-    Math.round((b1 + m) * 255)
-  ];
-}
-
-function setLabelTheme(theme) {
-  rootStyle.setProperty('--label-base-rgb', theme.base.join(', '));
-  rootStyle.setProperty('--label-ring-rgb', theme.ring.join(', '));
-  rootStyle.setProperty('--label-panel-rgb', theme.panel.join(', '));
-  rootStyle.setProperty('--label-ink-rgb', theme.ink.join(', '));
-  const panelLum = (0.2126 * theme.panel[0] + 0.7152 * theme.panel[1] + 0.0722 * theme.panel[2]) / 255;
-  if (panelLum > 0.64) {
-    rootStyle.setProperty('--record-groove-rgb', '38, 44, 58');
-    rootStyle.setProperty('--record-groove-alpha', '0.2');
-  } else {
-    rootStyle.setProperty('--record-groove-rgb', '236, 245, 255');
-    rootStyle.setProperty('--record-groove-alpha', '0.24');
-  }
-}
-
-function themeFromKey(meta) {
-  const key = `${meta.title || ''}|${meta.artist || ''}`;
-  const idx = hashString(key) % fallbackLabelPalettes.length;
-  return fallbackLabelPalettes[idx];
-}
-
-function themeFromArtworkAvg(avgRgb) {
-  const [h, s, l] = rgbToHsl(avgRgb[0], avgRgb[1], avgRgb[2]);
-  const sat = clamp(s * 1.15, 0.45, 0.92);
-  const baseL = clamp(l * 0.9 + 0.05, 0.38, 0.62);
-  const ringL = clamp(baseL * 0.62, 0.24, 0.42);
-  const panelL = clamp(0.9 + (0.5 - l) * 0.08, 0.82, 0.94);
-
-  return {
-    base: hslToRgb(h, sat, baseL),
-    ring: hslToRgb((h + 18) % 360, clamp(sat * 0.88, 0.34, 0.8), ringL),
-    panel: hslToRgb(h, clamp(s * 0.35, 0.16, 0.34), panelL),
-    ink: hslToRgb((h + 210) % 360, 0.24, 0.14)
-  };
-}
-
-function sampleArtworkAverageColor(url) {
-  return new Promise((resolve, reject) => {
-    if (!url) {
-      reject(new Error('No artwork URL'));
-      return;
-    }
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.decoding = 'async';
-    img.onload = () => {
-      try {
-        const w = 28;
-        const h = 28;
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) throw new Error('Canvas context unavailable');
-        ctx.drawImage(img, 0, 0, w, h);
-        const data = ctx.getImageData(0, 0, w, h).data;
-
-        let rSum = 0;
-        let gSum = 0;
-        let bSum = 0;
-        let weightSum = 0;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const a = data[i + 3] / 255;
-          if (a < 0.85) continue;
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const max = Math.max(r, g, b);
-          const min = Math.min(r, g, b);
-          const sat = max === 0 ? 0 : (max - min) / max;
-          const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-          if (lum < 0.06 || lum > 0.97) continue;
-          const weight = 0.5 + sat * 1.35;
-          rSum += r * weight;
-          gSum += g * weight;
-          bSum += b * weight;
-          weightSum += weight;
-        }
-
-        if (weightSum < 1) throw new Error('No usable pixels');
-        resolve([
-          Math.round(rSum / weightSum),
-          Math.round(gSum / weightSum),
-          Math.round(bSum / weightSum)
-        ]);
-      } catch (err) {
-        reject(err);
-      }
-    };
-    img.onerror = () => reject(new Error('Artwork load failed'));
-    img.src = url;
-  });
-}
-
-async function applyRecordLabelTheme(meta) {
-  const token = ++labelThemeToken;
-  const artwork = meta.artwork || '';
-  try {
-    if (!artwork) throw new Error('Missing artwork');
-
-    let theme = labelThemeCache.get(artwork);
-    if (!theme) {
-      const avg = await sampleArtworkAverageColor(artwork);
-      theme = themeFromArtworkAvg(avg);
-      labelThemeCache.set(artwork, theme);
-    }
-
-    if (token !== labelThemeToken) return;
-    setLabelTheme(theme);
-  } catch {
-    if (token !== labelThemeToken) return;
-    setLabelTheme(themeFromKey(meta));
-  }
-}
-
-function fitLabelText(value, maxLen) {
-  const s = (value || '').replace(/\s+/g, ' ').trim();
-  if (!s) return '';
-  if (s.length <= maxLen) return s;
-  return `${s.slice(0, maxLen - 1)}...`;
 }
 
 function updateAlbumMarqueeState() {
@@ -471,288 +277,6 @@ function bindMetadataLinks() {
   }
 }
 
-function setTransportEnabled(enabled) {
-  const btns = [btnPrevEl, btnPlayPauseEl, btnNextEl, btnPrevGlassEl, btnPlayPauseGlassEl, btnNextGlassEl, btnPrevMiniEl, btnPlayPauseMiniEl, btnNextMiniEl];
-  for (const btn of btns) {
-    if (!btn) continue;
-    btn.disabled = !enabled;
-  }
-}
-
-function updateTransportUi(meta) {
-  const controls = meta.controls || {};
-  const canPrev = controls.canSkipPrevious !== false;
-  const canNext = controls.canSkipNext !== false;
-  const canPlay = controls.canPlay !== false;
-  const canPause = controls.canPause !== false;
-
-  if (btnPrevEl) btnPrevEl.disabled = !canPrev;
-  if (btnNextEl) btnNextEl.disabled = !canNext;
-  if (btnPrevGlassEl) btnPrevGlassEl.disabled = !canPrev;
-  if (btnNextGlassEl) btnNextGlassEl.disabled = !canNext;
-  if (btnPrevMiniEl) btnPrevMiniEl.disabled = !canPrev;
-  if (btnNextMiniEl) btnNextMiniEl.disabled = !canNext;
-
-  const canToggle = canPlay || canPause;
-  if (btnPlayPauseEl) {
-    btnPlayPauseEl.disabled = !canToggle;
-    const playing = (meta.playbackStatus || '').toLowerCase() === 'playing';
-    btnPlayPauseEl.dataset.playing = playing ? 'true' : 'false';
-    btnPlayPauseEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    btnPlayPauseEl.title = playing ? 'Pause' : 'Play';
-  }
-
-  if (btnPlayPauseGlassEl) {
-    btnPlayPauseGlassEl.disabled = !canToggle;
-    const playing = (meta.playbackStatus || '').toLowerCase() === 'playing';
-    btnPlayPauseGlassEl.dataset.playing = playing ? 'true' : 'false';
-    btnPlayPauseGlassEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    btnPlayPauseGlassEl.title = playing ? 'Pause' : 'Play';
-  }
-
-  if (btnPlayPauseMiniEl) {
-    btnPlayPauseMiniEl.disabled = !canToggle;
-    const playing = (meta.playbackStatus || '').toLowerCase() === 'playing';
-    btnPlayPauseMiniEl.dataset.playing = playing ? 'true' : 'false';
-    btnPlayPauseMiniEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    btnPlayPauseMiniEl.title = playing ? 'Pause' : 'Play';
-  }
-}
-
-function triggerMediaControl(action) {
-  ipcRenderer.invoke('media-control', action).catch(() => {});
-}
-
-function bindTransportControls() {
-  if (btnPrevEl) {
-    btnPrevEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('previous');
-    });
-  }
-
-  if (btnPlayPauseEl) {
-    btnPlayPauseEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('playpause');
-    });
-  }
-
-  if (btnNextEl) {
-    btnNextEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('next');
-    });
-  }
-
-  if (btnPrevGlassEl) {
-    btnPrevGlassEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('previous');
-    });
-  }
-
-  if (btnPlayPauseGlassEl) {
-    btnPlayPauseGlassEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('playpause');
-    });
-  }
-
-  if (btnNextGlassEl) {
-    btnNextGlassEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('next');
-    });
-  }
-
-  if (btnPrevMiniEl) {
-    btnPrevMiniEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('previous');
-    });
-  }
-
-  if (btnPlayPauseMiniEl) {
-    btnPlayPauseMiniEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('playpause');
-    });
-  }
-
-  if (btnNextMiniEl) {
-    btnNextMiniEl.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      triggerMediaControl('next');
-    });
-  }
-
-  if (btnMiniCollapseEl) {
-    btnMiniCollapseEl.addEventListener('mousedown', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      suppressNextWidgetToggle = true;
-      setCurrentView('lid');
-      applyWidgetSize();
-      updateGlassSpectrumGeometry(true);
-    });
-  }
-}
-
-function volumeToAngle(volume) {
-  return -24 + clamp(volume, 0, 1) * 52;
-}
-
-function queueSystemVolumeCommit(volume) {
-  if (volumeControlState.commitTimer) clearTimeout(volumeControlState.commitTimer);
-  volumeControlState.commitTimer = setTimeout(() => {
-    ipcRenderer.invoke('system-volume:set', volume).catch(() => {});
-  }, 90);
-}
-
-function setVolumeUi(volume) {
-  const v = clamp(volume, 0, 1);
-  volumeControlState.volume = v;
-  volumeControlState.muted = v <= 0.001;
-  if (!volumeControlState.muted) {
-    volumeControlState.lastAudibleVolume = v;
-  }
-  const pct = Math.round(v * 100);
-  rootStyle.setProperty('--source-knob-angle', `${volumeToAngle(v).toFixed(2)}deg`);
-  rootStyle.setProperty('--source-volume-pct', `${pct}%`);
-  if (sourceKnobEl) {
-    sourceKnobEl.title = `Audio source: ${volumeControlState.sourceLabel} | Volume ${pct}%`;
-  }
-  if (sourceVolumeGlassEl) {
-    sourceVolumeGlassEl.value = String(pct);
-    sourceVolumeGlassEl.title = `Audio source: ${volumeControlState.sourceLabel} | Volume ${pct}%`;
-  }
-  if (volumeBtnGlassEl) {
-    volumeBtnGlassEl.dataset.muted = volumeControlState.muted ? 'true' : 'false';
-    volumeBtnGlassEl.title = volumeControlState.muted ? 'Unmute' : 'Mute';
-  }
-  if (volumeValueGlassEl) {
-    volumeValueGlassEl.textContent = `${pct}%`;
-  }
-}
-
-function onVolumeButtonGlassClick(ev) {
-  if (!volumeBtnGlassEl) return;
-  ev.preventDefault();
-  ev.stopPropagation();
-
-  const next = volumeControlState.muted
-    ? clamp(volumeControlState.lastAudibleVolume > 0.01 ? volumeControlState.lastAudibleVolume : 0.5, 0, 1)
-    : 0;
-
-  if (!volumeControlState.muted && volumeControlState.volume > 0.01) {
-    volumeControlState.lastAudibleVolume = volumeControlState.volume;
-  }
-
-  setVolumeUi(next);
-  if (volumeControlState.commitTimer) {
-    clearTimeout(volumeControlState.commitTimer);
-    volumeControlState.commitTimer = null;
-  }
-  ipcRenderer.invoke('system-volume:set', next).catch(() => {});
-  volumeBtnGlassEl.blur();
-}
-
-async function loadSystemVolume() {
-  try {
-    const level = await ipcRenderer.invoke('system-volume:get');
-    if (Number.isFinite(level)) setVolumeUi(level);
-  } catch {}
-}
-
-function onSourceKnobMouseDown(ev) {
-  if (!sourceKnobEl || ev.button !== 0) return;
-  volumeControlState.dragging = true;
-  volumeControlState.startY = ev.clientY;
-  volumeControlState.startVolume = volumeControlState.volume;
-  setWidgetInteractive(true);
-  ev.preventDefault();
-  ev.stopPropagation();
-}
-
-function onSourceKnobWheel(ev) {
-  if (!sourceKnobEl) return;
-  const delta = ev.deltaY > 0 ? -0.06 : 0.06;
-  const next = clamp(volumeControlState.volume + delta, 0, 1);
-  setVolumeUi(next);
-  queueSystemVolumeCommit(next);
-  ev.preventDefault();
-  ev.stopPropagation();
-}
-
-function onSourceKnobMouseMove(ev) {
-  if (!volumeControlState.dragging) return;
-  const delta = (volumeControlState.startY - ev.clientY) / 120;
-  const next = clamp(volumeControlState.startVolume + delta, 0, 1);
-  setVolumeUi(next);
-  queueSystemVolumeCommit(next);
-}
-
-function onSourceKnobMouseUp() {
-  if (!volumeControlState.dragging) return;
-  volumeControlState.dragging = false;
-  if (volumeControlState.commitTimer) {
-    clearTimeout(volumeControlState.commitTimer);
-    volumeControlState.commitTimer = null;
-  }
-  ipcRenderer.invoke('system-volume:set', volumeControlState.volume).catch(() => {});
-  setWidgetInteractive(isMouseOverWidget(lastMouseX, lastMouseY));
-}
-
-function onSourceVolumeGlassInput(ev) {
-  if (!sourceVolumeGlassEl) return;
-  const raw = Number(ev.target && ev.target.value);
-  const next = clamp(Number.isFinite(raw) ? raw / 100 : volumeControlState.volume, 0, 1);
-  setVolumeUi(next);
-  ipcRenderer.invoke('system-volume:set', next).catch(() => {});
-  setWidgetInteractive(true);
-  ev.preventDefault();
-  ev.stopPropagation();
-}
-
-function onSourceVolumeGlassWheel(ev) {
-  if (!sourceVolumeGlassEl) return;
-  const delta = ev.deltaY > 0 ? -0.06 : 0.06;
-  const next = clamp(volumeControlState.volume + delta, 0, 1);
-  setVolumeUi(next);
-  queueSystemVolumeCommit(next);
-  ev.preventDefault();
-  ev.stopPropagation();
-}
-
-function onSourceVolumeGlassCommit(ev) {
-  if (volumeControlState.commitTimer) {
-    clearTimeout(volumeControlState.commitTimer);
-    volumeControlState.commitTimer = null;
-  }
-  const raw = Number(ev && ev.target && ev.target.value);
-  const next = clamp(Number.isFinite(raw) ? raw / 100 : volumeControlState.volume, 0, 1);
-  setVolumeUi(next);
-  ipcRenderer.invoke('system-volume:set', next).catch(() => {});
-  setWidgetInteractive(isMouseOverWidget(lastMouseX, lastMouseY));
-}
-
-function updateVolumeUiSource(meta) {
-  const source = inferSource(meta.appId);
-  rootStyle.setProperty('--source-accent', source.accent);
-  volumeControlState.sourceLabel = source.label;
-  setVolumeUi(volumeControlState.volume);
-}
-
 function applyWidgetSize() {
   if (!widgetEl) return;
   const rect = widgetEl.getBoundingClientRect();
@@ -825,7 +349,7 @@ function toggleCompactMode() {
     setCurrentView(compactMode ? 'full' : 'lid');
   }
   applyWidgetSize();
-  updateGlassSpectrumGeometry(true);
+  spectrumCanvas.updateGlassSpectrumGeometry(true);
   if (widgetEl) {
     widgetEl.dataset.transitioning = 'true';
     // Close → lid: 1650ms covers recordClose (880ms) + right transition (1000ms)
@@ -1006,13 +530,14 @@ function onResizeHandleMouseMove(ev) {
   uiState.scale = ratio;
   if (scaleSliderEl) scaleSliderEl.value = String(Math.round(ratio * 100));
   applyWidgetSize();
-  updateGlassSpectrumGeometry(true);
+  spectrumCanvas.updateGlassSpectrumGeometry(true);
 }
 
 function onResizeHandleMouseUp() {
   if (!resizing) return;
   resizing = false;
   setWidgetInteractive(isMouseOverWidget(lastMouseX, lastMouseY));
+  saveSettings();
 }
 
 function onSettingsButtonClick(ev) {
@@ -1064,18 +589,21 @@ function onQuickSettingsClick(ev) {
 
 function onThemeChanged(ev) {
   applyTheme(ev && ev.target ? ev.target.value : 'light');
+  saveSettings();
 }
 
 function onScaleChanged(ev) {
   const raw = Number(ev && ev.target ? ev.target.value : 100);
   uiState.scale = clampScale((Number.isFinite(raw) ? raw : 100) / 100);
   applyWidgetSize();
-  updateGlassSpectrumGeometry(true);
+  spectrumCanvas.updateGlassSpectrumGeometry(true);
+  saveSettings();
 }
 
 function onClearGlassChanged(ev) {
   const on = !!(ev && ev.target && ev.target.checked);
   applyGlassClarity(on);
+  saveSettings();
 }
 
 async function onLaunchToggleChanged(ev) {
@@ -1112,6 +640,7 @@ function onMiniModeToggle(ev) {
   const next = on ? 'mini' : 'full';
   setCurrentView(next);
   applyWidgetSize();
+  saveSettings();
 }
 
 async function loadLaunchSetting() {
@@ -1124,10 +653,20 @@ async function loadLaunchSetting() {
   }
 }
 
+loadSettings();
 applyTheme(uiState.theme);
 applyGlassClarity(uiState.clearGlass);
-setCurrentView('full');
+setCurrentView(uiState.miniMode ? 'mini' : 'full');
 applyWidgetSize();
+labelTheme.init(rootStyle);
+artTransition.init(
+  { recordArtEl, recordArtNewEl, sleeveArtEl, sleeveArtNewEl, miniArtEl },
+  () => playbackProgressState.trackKey
+);
+spectrumCanvas.init(
+  { glassSpectrumEl, miniSpectrumEl, miniArtEl, recordEl },
+  () => currentView
+);
 if (frameEl) frameEl.style.height = `${cfg.widget.barsHeight}px`;
 if (widgetEl) {
   widgetEl.dataset.draggable = 'true';
@@ -1139,19 +678,23 @@ if (widgetEl) {
   widgetEl.addEventListener('mousedown', onWidgetMouseDown);
 }
 bindMetadataLinks();
-bindTransportControls();
-if (sourceKnobEl) {
-  sourceKnobEl.addEventListener('mousedown', onSourceKnobMouseDown);
-  sourceKnobEl.addEventListener('wheel', onSourceKnobWheel, { passive: false });
-}
-if (sourceVolumeGlassEl) {
-  sourceVolumeGlassEl.addEventListener('input', onSourceVolumeGlassInput);
-  sourceVolumeGlassEl.addEventListener('change', onSourceVolumeGlassCommit);
-  sourceVolumeGlassEl.addEventListener('wheel', onSourceVolumeGlassWheel, { passive: false });
-}
-if (volumeBtnGlassEl) {
-  volumeBtnGlassEl.addEventListener('click', onVolumeButtonGlassClick);
-}
+transport.init({
+  ipcRenderer,
+  elements: { btnPrevEl, btnPlayPauseEl, btnNextEl, btnPrevGlassEl, btnPlayPauseGlassEl, btnNextGlassEl, btnPrevMiniEl, btnPlayPauseMiniEl, btnNextMiniEl, btnMiniCollapseEl },
+  onMiniCollapseViewChange() {
+    suppressNextWidgetToggle = true;
+    setCurrentView('lid');
+    applyWidgetSize();
+    spectrumCanvas.updateGlassSpectrumGeometry(true);
+  }
+});
+volumeControl.init({
+  ipcRenderer,
+  rootStyle,
+  elements: { sourceKnobEl, sourceVolumeGlassEl, volumeBtnGlassEl, volumeValueGlassEl },
+  onInteraction: setWidgetInteractive,
+  onRelease: () => setWidgetInteractive(isMouseOverWidget(lastMouseX, lastMouseY))
+});
 if (btnSettingsEl) {
   btnSettingsEl.addEventListener('click', onSettingsButtonClick);
 }
@@ -1168,15 +711,17 @@ if (quickSettingsEl) {
   quickSettingsEl.addEventListener('click', onQuickSettingsClick);
 }
 if (themeSelectEl) {
-  themeSelectEl.value = uiState.theme;
-  themeSelectEl.addEventListener('change', onThemeChanged);
+  themeSelectEl.querySelectorAll('.themePill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.value === uiState.theme);
+    pill.addEventListener('click', () => onThemeChanged({ target: { value: pill.dataset.value } }));
+  });
 }
 if (scaleSliderEl) {
   scaleSliderEl.value = String(Math.round(uiState.scale * 100));
   scaleSliderEl.addEventListener('input', onScaleChanged);
 }
 if (clearGlassToggleEl) {
-  clearGlassToggleEl.checked = true;
+  clearGlassToggleEl.checked = uiState.clearGlass;
   clearGlassToggleEl.addEventListener('change', onClearGlassChanged);
 }
 if (launchToggleEl) {
@@ -1215,12 +760,10 @@ if (miniArtEl) {
   miniArtEl.draggable = false;
 }
 loadLaunchSetting();
-loadSystemVolume();
+volumeControl.loadSystemVolume();
 window.addEventListener('mousemove', onWidgetMouseMove);
-window.addEventListener('mousemove', onSourceKnobMouseMove);
 window.addEventListener('mousemove', onResizeHandleMouseMove);
 window.addEventListener('mouseup', onWidgetMouseUp);
-window.addEventListener('mouseup', onSourceKnobMouseUp);
 window.addEventListener('mouseup', onResizeHandleMouseUp);
 window.addEventListener('blur', () => {
   // Safety: release all drag/resize state if the window loses focus
@@ -1291,207 +834,6 @@ function updateArcMotion(freqData, state, active, level) {
   rootStyle.setProperty('--arc-opacity', opacity.toFixed(3));
 }
 
-function updateGlassSpectrumGeometry(force = false) {
-  if (!glassSpectrumEl || !widgetEl || !recordEl || !spectrumState.ctx) return;
-
-  const rect = glassSpectrumEl.getBoundingClientRect();
-  if (rect.width < 2 || rect.height < 2) return;
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const width = Math.max(1, Math.round(rect.width * dpr));
-  const height = Math.max(1, Math.round(rect.height * dpr));
-  if (force || spectrumState.width !== width || spectrumState.height !== height || spectrumState.dpr !== dpr) {
-    glassSpectrumEl.width = width;
-    glassSpectrumEl.height = height;
-    spectrumState.width = width;
-    spectrumState.height = height;
-    spectrumState.dpr = dpr;
-  }
-
-  const canvasRect = glassSpectrumEl.getBoundingClientRect();
-  const recordRect = recordEl.getBoundingClientRect();
-  const centerX = ((recordRect.left + recordRect.width * 0.5) - canvasRect.left) * dpr;
-  const centerY = ((recordRect.top + recordRect.height * 0.5) - canvasRect.top) * dpr;
-  const recordRadius = Math.max(24, recordRect.width * 0.5 * dpr);
-
-  const geomStamp = `${Math.round(centerX)}:${Math.round(centerY)}:${Math.round(recordRadius)}:${width}:${height}`;
-  if (force || geomStamp !== spectrumState.geomStamp) {
-    spectrumState.centerX = centerX;
-    spectrumState.centerY = centerY;
-    spectrumState.recordRadius = recordRadius;
-    spectrumState.geomStamp = geomStamp;
-  }
-}
-
-function renderGlassSpectrum(freqData, active, level) {
-  if (!glassSpectrumEl || !spectrumState.ctx) return;
-
-  const view = currentView || (widgetEl && widgetEl.dataset.view) || 'full';
-  const lidMode = view === 'lid';
-  if (!lidMode) {
-    if (spectrumState.width > 0 && spectrumState.height > 0) {
-      spectrumState.ctx.clearRect(0, 0, spectrumState.width, spectrumState.height);
-    }
-    return;
-  }
-
-  updateGlassSpectrumGeometry();
-  const ctx = spectrumState.ctx;
-  const { width, height, centerX, centerY, recordRadius, levels } = spectrumState;
-  if (width < 2 || height < 2 || recordRadius < 2) return;
-
-  const dpr = spectrumState.dpr;
-  ctx.clearRect(0, 0, width, height);
-
-  const bars = levels.length; // 64
-  const halfBars = bars / 2;
-  const freqMax = Math.max(16, Math.floor(freqData.length * 0.72));
-
-  // Idle breathing animation
-  spectrumState.idlePhase += 0.016;
-
-  // ── Bass pulse ring ────────────────────────────────────────────────────────
-  const bassBins = Math.min(10, freqData.length);
-  let bassSum = 0;
-  for (let b = 0; b < bassBins; b++) bassSum += freqData[b];
-  const bassNow = clamp(bassSum / bassBins / 255, 0, 1);
-  spectrumState.bass = spectrumState.bass * 0.84 + bassNow * 0.16;
-  const br = spectrumState.bass;
-  const ringAlpha = clamp(0.2 + br * 0.42, 0.16, 0.62);
-  const ringR = recordRadius + (1 + br * 4) * dpr;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, ringR, 0, Math.PI * 2);
-  ctx.strokeStyle = `rgba(126, 209, 255, ${ringAlpha.toFixed(3)})`;
-  ctx.lineWidth = (1.2 + br * 3) * dpr;
-  ctx.shadowColor = `rgba(96, 198, 255, ${(ringAlpha * 0.85).toFixed(3)})`;
-  ctx.shadowBlur = (6 + br * 18) * dpr;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Rotating concentric ring lattice so the effect remains on-glass even when bars are subtle.
-  const ringCount = 3;
-  const baseRot = spectrumState.idlePhase * (0.8 + br * 0.9);
-  for (let r = 0; r < ringCount; r++) {
-    const rr = recordRadius + (7 + r * 8 + Math.sin(spectrumState.idlePhase * (1.1 + r * 0.23)) * (0.9 + br * 1.8)) * dpr;
-    const segs = 72;
-    const a0 = baseRot * (r % 2 === 0 ? 1 : -1) + r * 0.8;
-    const aAlpha = clamp(0.16 + br * 0.26 - r * 0.03, 0.08, 0.38);
-
-    ctx.beginPath();
-    for (let s = 0; s <= segs; s++) {
-      const t = s / segs;
-      const a = a0 + t * Math.PI * 2;
-      const wobble = Math.sin(a * (2 + r) + spectrumState.idlePhase * (1.4 + r * 0.2)) * (0.7 + br * 1.8) * dpr;
-      const x = centerX + Math.cos(a) * (rr + wobble);
-      const y = centerY + Math.sin(a) * (rr + wobble);
-      if (s === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.lineWidth = (0.9 + r * 0.18) * dpr;
-    ctx.strokeStyle = `rgba(${r === 1 ? '78, 187, 255' : '97, 226, 241'}, ${aAlpha.toFixed(3)})`;
-    ctx.stroke();
-  }
-
-  // ── 360° symmetric radial bars ─────────────────────────────────────────────
-  const baseGap = 4 * dpr;
-  const maxBarLen = 24 * dpr;
-
-  for (let i = 0; i < bars; i++) {
-    // Symmetric: both halves mirror each other around the top (–PI/2)
-    const half = i < halfBars ? i : bars - 1 - i;
-    const norm = half / (halfBars - 1);          // 0 = top, 1 = bottom
-    const side = i < halfBars ? 1 : -1;
-    const angle = -Math.PI / 2 + side * norm * Math.PI;
-
-    // Log-curved frequency mapping (more detail in lows)
-    const t = Math.pow(norm, 0.8);
-    const bin = Math.min(freqData.length - 1, Math.floor(1 + t * (freqMax - 1)));
-    const raw = clamp(freqData[bin] / 255, 0, 1);
-    const idleTarget = (0.055 + Math.sin(spectrumState.idlePhase + norm * Math.PI * 2) * 0.02) * (1 - norm * 0.3);
-    const target = active ? raw * 0.95 : idleTarget;
-    const resp = target > levels[i] ? 0.26 : 0.11;
-    levels[i] += (target - levels[i]) * resp;
-
-    const amp = Math.pow(levels[i], 0.64);
-    const r1 = recordRadius + baseGap;
-    const r2 = recordRadius + baseGap + amp * maxBarLen;
-    const x1 = centerX + Math.cos(angle) * r1;
-    const y1 = centerY + Math.sin(angle) * r1;
-    const x2 = centerX + Math.cos(angle) * r2;
-    const y2 = centerY + Math.sin(angle) * r2;
-
-    // Glass gradient: opaque white-blue base → transparent tip
-    const grad = ctx.createLinearGradient(x1, y1, x2, y2);
-    const baseA = clamp(0.48 + amp * 0.40, 0.38, 0.90);
-    const tipA  = clamp(amp * 0.18, 0, 0.24);
-    const col   = active ? '132, 222, 255' : '92, 184, 234';
-    grad.addColorStop(0, `rgba(${col}, ${baseA.toFixed(3)})`);
-    grad.addColorStop(1, `rgba(${col}, ${tipA.toFixed(3)})`);
-
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.lineWidth = clamp((0.9 + amp * 1.8) * dpr, 0.8 * dpr, 3.2 * dpr);
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = grad;
-    ctx.stroke();
-  }
-}
-
-function renderMiniSpectrum(freqData, active) {
-  if (!miniSpectrumState.ctx || !miniSpectrumEl || !miniArtEl) return;
-  if (currentView !== 'mini' && currentView !== 'mini-lid') {
-    if (miniSpectrumState.width > 0 && miniSpectrumState.height > 0) {
-      miniSpectrumState.ctx.clearRect(0, 0, miniSpectrumState.width, miniSpectrumState.height);
-    }
-    return;
-  }
-
-  const rect = miniSpectrumEl.getBoundingClientRect();
-  if (rect.width < 2 || rect.height < 2) return;
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const width = Math.max(1, Math.round(rect.width * dpr));
-  const height = Math.max(1, Math.round(rect.height * dpr));
-  if (miniSpectrumState.width !== width || miniSpectrumState.height !== height || miniSpectrumState.dpr !== dpr) {
-    miniSpectrumEl.width = width;
-    miniSpectrumEl.height = height;
-    miniSpectrumState.width = width;
-    miniSpectrumState.height = height;
-    miniSpectrumState.dpr = dpr;
-  }
-
-  const ctx = miniSpectrumState.ctx;
-  ctx.clearRect(0, 0, width, height);
-  miniSpectrumState.phase += 0.02;
-
-  const levels = miniSpectrumState.levels;
-  const bars = levels.length;
-  const span = width * 0.86;
-  const startX = (width - span) * 0.5;
-  const w = span / bars;
-  const baseline = height * 0.88;
-  const maxH = height * 0.45;
-
-  for (let i = 0; i < bars; i++) {
-    const t = i / Math.max(1, bars - 1);
-    const bin = Math.min(freqData.length - 1, Math.floor(Math.pow(t, 0.82) * (freqData.length * 0.58)));
-    const raw = clamp(freqData[bin] / 255, 0, 1);
-    const idle = 0.03 + Math.sin(miniSpectrumState.phase + i * 0.26) * 0.015;
-    const target = active ? raw : idle;
-    const rate = target > levels[i] ? 0.32 : 0.12;
-    levels[i] += (target - levels[i]) * rate;
-    const amp = Math.pow(levels[i], 0.72);
-    const h = Math.max(1 * dpr, amp * maxH);
-
-    const x = startX + i * w;
-    const grad = ctx.createLinearGradient(x, baseline - h, x, baseline);
-    grad.addColorStop(0, 'rgba(202, 238, 255, 0.85)');
-    grad.addColorStop(1, 'rgba(120, 174, 233, 0.18)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, baseline - h, Math.max(1, w * 0.68), h);
-  }
-}
-
 function updatePlaybackProgress(nowMs) {
   if (!miniProgressFillEl) return;
   if (playbackProgressState.playing) {
@@ -1508,104 +850,6 @@ function updatePlaybackProgress(nowMs) {
   const sway = Math.sin(nowMs / 430) * (currentMeta.playbackStatus === 'playing' ? 0.9 : 0.25);
   rootStyle.setProperty('--tonearm-track', trackT.toFixed(4));
   rootStyle.setProperty('--tonearm-sway', `${sway.toFixed(2)}deg`);
-}
-
-// Runs the full record-burn + sleeve-dissolve + mini-fade transition.
-// Called once we have confirmed artwork for the incoming track.
-function _doArtTransition(meta) {
-  const gen = ++_artBurnGen;
-
-  // ── Record art ───────────────────────────────────────────────────────────
-  if (recordArtEl) {
-    if (recordArtNewEl) {
-      if (meta.artwork) recordArtNewEl.src = meta.artwork;
-      else recordArtNewEl.removeAttribute('src');
-    }
-    if (!recordArtEl.dataset.burning) {
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (_artBurnGen !== gen) return;
-        recordArtEl.dataset.burning = 'true';
-      }));
-    }
-    setTimeout(() => {
-      if (_artBurnGen !== gen) return;
-      const finalize = () => {
-        recordArtEl.removeAttribute('data-burning');
-        requestAnimationFrame(() => {
-          if (recordArtNewEl) recordArtNewEl.removeAttribute('src');
-        });
-      };
-      if (meta.artwork) {
-        recordArtEl.src = meta.artwork;
-        const dp = recordArtEl.decode ? recordArtEl.decode() : Promise.reject();
-        dp.then(() => { if (_artBurnGen === gen) finalize(); })
-          .catch(() => { if (_artBurnGen === gen) finalize(); });
-      } else {
-        recordArtEl.removeAttribute('src');
-        finalize();
-      }
-    }, 930);
-  }
-
-  // ── Sleeve art ───────────────────────────────────────────────────────────
-  if (sleeveArtEl) {
-    if (sleeveArtNewEl) {
-      if (meta.artwork) sleeveArtNewEl.src = meta.artwork;
-      else sleeveArtNewEl.removeAttribute('src');
-      sleeveArtEl.dataset.changing = 'true';
-      const startDissolve = () => {
-        sleeveArtNewEl.onload = null;
-        sleeveArtNewEl.onerror = null;
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          sleeveArtNewEl.dataset.visible = 'true';
-        }));
-        setTimeout(() => {
-          if (meta.artwork) {
-            sleeveArtEl.src = meta.artwork;
-            const finishSleeve = () => {
-              sleeveArtEl.removeAttribute('data-changing');
-              sleeveArtNewEl.removeAttribute('data-visible');
-              setTimeout(() => sleeveArtNewEl.removeAttribute('src'), 460);
-            };
-            const sd = sleeveArtEl.decode ? sleeveArtEl.decode() : Promise.reject();
-            sd.then(finishSleeve).catch(finishSleeve);
-          } else {
-            sleeveArtEl.removeAttribute('src');
-            sleeveArtEl.removeAttribute('data-changing');
-            sleeveArtNewEl.removeAttribute('data-visible');
-            sleeveArtNewEl.removeAttribute('src');
-          }
-        }, 380);
-      };
-      if (!meta.artwork || sleeveArtNewEl.complete) {
-        startDissolve();
-      } else {
-        sleeveArtNewEl.onload = startDissolve;
-        sleeveArtNewEl.onerror = startDissolve;
-      }
-    } else {
-      sleeveArtEl.dataset.changing = 'true';
-      setTimeout(() => {
-        if (meta.artwork) sleeveArtEl.src = meta.artwork;
-        else sleeveArtEl.removeAttribute('src');
-        requestAnimationFrame(() => requestAnimationFrame(() =>
-          sleeveArtEl.removeAttribute('data-changing')
-        ));
-      }, 360);
-    }
-  }
-
-  // ── Mini art ─────────────────────────────────────────────────────────────
-  if (miniArtEl) {
-    miniArtEl.dataset.changing = 'true';
-    setTimeout(() => {
-      if (meta.artwork) miniArtEl.src = meta.artwork;
-      else miniArtEl.removeAttribute('src');
-      requestAnimationFrame(() => requestAnimationFrame(() =>
-        miniArtEl.removeAttribute('data-changing')
-      ));
-    }, 200);
-  }
 }
 
 function setMetadata(meta) {
@@ -1636,57 +880,17 @@ function setMetadata(meta) {
   if (glassAlbumEl) glassAlbumEl.textContent = meta.album || 'Album unknown';
   if (miniTitleEl) miniTitleEl.textContent = meta.title || 'Unknown Track';
   if (miniArtistEl) miniArtistEl.textContent = meta.artist || 'Unknown Artist';
-  updateVolumeUiSource(currentMeta);
-  updateTransportUi(currentMeta);
-  if (labelTitleEl) labelTitleEl.textContent = fitLabelText(meta.title || 'Unknown Track', 16);
-  if (labelArtistEl) labelArtistEl.textContent = fitLabelText(meta.artist || 'Unknown Artist', 16);
-  applyRecordLabelTheme(meta);
+  volumeControl.updateVolumeUiSource(inferSource(currentMeta.appId));
+  transport.updateTransportUi(currentMeta);
+  if (labelTitleEl) labelTitleEl.textContent = labelTheme.fitLabelText(meta.title || 'Unknown Track', 16);
+  if (labelArtistEl) labelArtistEl.textContent = labelTheme.fitLabelText(meta.artist || 'Unknown Artist', 16);
+  labelTheme.applyRecordLabelTheme(meta);
 
   // Compute track key before touching art so we know whether to animate the swap
   const trackKey = `${currentMeta.appId}|${currentMeta.title}|${currentMeta.artist}`;
   const isNewTrack = !!(prevTrackKey && prevTrackKey !== trackKey);
 
-  // ── Art transition: debounced, artwork-guarded ───────────────────────────
-
-  // Artwork just arrived for a track we were holding — fire the transition now.
-  const pendingArtFired = (_pendingArtKey === trackKey) && !!meta.artwork;
-  if (pendingArtFired) _pendingArtKey = null;
-
-  if (isNewTrack) {
-    // User changed tracks — cancel any prior debounce (they may still be skipping)
-    if (_transDebounce) { clearTimeout(_transDebounce); _transDebounce = null; }
-    _pendingArtKey = null;
-
-    const capMeta = meta;
-    const capKey  = trackKey;
-    // Short wait: if the user skips again within 80 ms we restart the timer
-    // and never animate to an in-between track.
-    _transDebounce = setTimeout(() => {
-      _transDebounce = null;
-      // If the user moved on to yet another track during the debounce, bail out.
-      if (playbackProgressState.trackKey !== capKey) return;
-      if (capMeta.artwork) {
-        _doArtTransition(capMeta);
-      } else {
-        // Artwork hasn't arrived yet — hold the current display and wait.
-        _pendingArtKey = capKey;
-      }
-    }, 80);
-
-  } else if (pendingArtFired) {
-    // Artwork arrived for the held track — animate now, no debounce needed.
-    _doArtTransition(meta);
-
-  } else {
-    // Same track, plain metadata update.
-    // Only touch artwork srcs if we actually have art — never blank out a
-    // valid image while waiting for replacement art to arrive.
-    if (meta.artwork) {
-      if (sleeveArtEl) sleeveArtEl.src = meta.artwork;
-      if (recordArtEl) recordArtEl.src = meta.artwork;
-      if (miniArtEl)   miniArtEl.src   = meta.artwork;
-    }
-  }
+  artTransition.handleMetaUpdate(meta, trackKey, isNewTrack);
 
   playbackProgressState.trackKey = trackKey;
   playbackProgressState.playing = currentMeta.playbackStatus === 'playing';
@@ -1756,7 +960,7 @@ async function start() {
     window.addEventListener('resize', () => {
       applyWidgetSize();
       updateAlbumMarqueeState();
-      updateGlassSpectrumGeometry(true);
+      spectrumCanvas.updateGlassSpectrumGeometry(true);
       resize();
     });
 
@@ -1770,8 +974,8 @@ async function start() {
       const { active, level } = detectAudioActive(freq, detector, cfg);
       setStatus(active, level);
       updateArcMotion(freq, arcMotion, active, level);
-      renderGlassSpectrum(freq, active, level);
-      renderMiniSpectrum(freq, active);
+      spectrumCanvas.renderGlassSpectrum(freq, active, level);
+      spectrumCanvas.renderMiniSpectrum(freq, active);
       updatePlaybackProgress(now);
       update(freq, time);
       renderer.render(scene, camera);

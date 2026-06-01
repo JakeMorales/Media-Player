@@ -352,3 +352,91 @@
   gap: 10px;
   align-items: center;
 }
+
+/* ── Theme overrides — buttons & knob ── */
+
+/* Dark */
+#widget[data-theme="dark"] .mediaBtn,
+#widget[data-theme="dark"] #btnSettings {
+  border-color: rgba(80, 100, 130, 0.62);
+  background:
+    conic-gradient(from 16deg, #3a4558, #2a3548, #48566a, #222f40, #3a4558),
+    radial-gradient(circle at 34% 30%, rgba(80, 100, 130, 0.9), rgba(32, 42, 58, 0.95));
+  box-shadow: 0 0 0 1px rgba(60, 80, 110, 0.5), 0 3px 7px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(100, 130, 170, 0.44);
+  color: rgba(210, 225, 245, 0.92);
+}
+#widget[data-theme="dark"] .mediaBtn svg,
+#widget[data-theme="dark"] #btnSettings svg {
+  fill: rgba(200, 220, 245, 0.92);
+  color: rgba(200, 220, 245, 0.92);
+}
+#widget[data-theme="dark"] .knob {
+  background:
+    conic-gradient(from 15deg, #3a4558, #2a3548, #48566a, #222f40, #3a4558),
+    radial-gradient(circle at 35% 35%, rgba(80, 100, 130, 0.85), rgba(32, 42, 58, 0.95));
+  box-shadow: 0 0 0 1px rgba(60, 80, 110, 0.55), 0 3px 7px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(100, 130, 170, 0.38);
+}
+
+/* Cream */
+#widget[data-theme="cream"] .mediaBtn,
+#widget[data-theme="cream"] #btnSettings {
+  border-color: rgba(144, 116, 72, 0.58);
+  background:
+    conic-gradient(from 16deg, #d8cab4, #b8a488, #ece0cc, #a8966e, #d8cab4),
+    radial-gradient(circle at 34% 30%, rgba(255, 248, 232, 0.94), rgba(180, 158, 112, 0.96));
+  box-shadow: 0 0 0 1px rgba(140, 112, 68, 0.48), 0 3px 7px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 248, 226, 0.78);
+  color: rgba(60, 40, 16, 0.92);
+}
+#widget[data-theme="cream"] .mediaBtn svg,
+#widget[data-theme="cream"] #btnSettings svg {
+  fill: rgba(60, 40, 16, 0.92);
+  color: rgba(60, 40, 16, 0.92);
+}
+#widget[data-theme="cream"] .knob {
+  background:
+    conic-gradient(from 15deg, #d8cab4, #b8a488, #ece0cc, #a8966e, #d8cab4),
+    radial-gradient(circle at 35% 35%, rgba(255, 248, 232, 0.9), rgba(180, 158, 112, 0.95));
+  box-shadow: 0 0 0 1px rgba(140, 112, 68, 0.55), 0 3px 7px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 248, 226, 0.78);
+}
+
+/* Pastel */
+#widget[data-theme="pastel"] .mediaBtn,
+#widget[data-theme="pastel"] #btnSettings {
+  border-color: rgba(100, 128, 176, 0.58);
+  background:
+    conic-gradient(from 16deg, #c4d4ec, #aabcd8, #dce8f8, #98aecb, #c4d4ec),
+    radial-gradient(circle at 34% 30%, rgba(240, 248, 255, 0.94), rgba(158, 180, 210, 0.96));
+  box-shadow: 0 0 0 1px rgba(96, 122, 170, 0.48), 0 3px 7px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(240, 248, 255, 0.78);
+  color: rgba(24, 38, 64, 0.92);
+}
+#widget[data-theme="pastel"] .mediaBtn svg,
+#widget[data-theme="pastel"] #btnSettings svg {
+  fill: rgba(24, 38, 64, 0.92);
+  color: rgba(24, 38, 64, 0.92);
+}
+#widget[data-theme="pastel"] .knob {
+  background:
+    conic-gradient(from 15deg, #c4d4ec, #aabcd8, #dce8f8, #98aecb, #c4d4ec),
+    radial-gradient(circle at 35% 35%, rgba(240, 248, 255, 0.9), rgba(158, 180, 210, 0.95));
+  box-shadow: 0 0 0 1px rgba(96, 122, 170, 0.55), 0 3px 7px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(240, 248, 255, 0.78);
+}
+
+/* Transparent */
+#widget[data-theme="transparent"] .mediaBtn,
+#widget[data-theme="transparent"] #btnSettings {
+  border-color: rgba(160, 200, 240, 0.28);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.14), rgba(180, 210, 240, 0.06) 60%, rgba(0, 0, 0, 0));
+  box-shadow: 0 0 0 1px rgba(180, 210, 240, 0.2), 0 3px 7px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: rgba(220, 238, 255, 0.92);
+}
+#widget[data-theme="transparent"] .mediaBtn svg,
+#widget[data-theme="transparent"] #btnSettings svg {
+  fill: rgba(220, 238, 255, 0.92);
+  color: rgba(220, 238, 255, 0.92);
+}
+#widget[data-theme="transparent"] .knob {
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.18), rgba(180, 210, 240, 0.08) 60%, rgba(0, 0, 0, 0));
+  box-shadow: 0 0 0 1px rgba(160, 200, 240, 0.28), 0 3px 7px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
