@@ -66,6 +66,8 @@ const recordArtNewEl = document.getElementById('recordArtNew');
 const glassSpectrumEl = document.getElementById('glassSpectrum');
 const labelTitleEl = document.getElementById('labelTitle');
 const labelArtistEl = document.getElementById('labelArtist');
+const powerLightEl = document.getElementById('powerLight');
+const armMountEl = document.getElementById('armMount');
 const rootStyle = document.documentElement.style;
 let dragging = false;
 let pointerDown = false;
@@ -379,6 +381,9 @@ function applyWidgetSize() {
   // during width transitions — right:Xpx on the record stays screen-stable.
   document.documentElement.style.setProperty('--record-right-full', `${Math.round(baseW / 2) - recordHalfW}px`);
   document.documentElement.style.setProperty('--record-right-lid',  `${Math.round(lidW * 0.49) - recordHalfW}px`);
+
+  // reposition the power light to follow the arm mount
+  updatePowerLightPosition();
 }
 
 function isTextTarget(target) {
@@ -407,7 +412,14 @@ function toggleCompactMode() {
     setTimeout(() => {
       if (widgetEl) widgetEl.dataset.transitioning = 'false';
       isTransitioning = false;
+      // ensure any inline z-index override is removed so CSS stacking can take over
+      if (powerLightEl) {
+        powerLightEl.style.zIndex = '';
+        if (powerLightEl.dataset && powerLightEl.dataset._prevZ) delete powerLightEl.dataset._prevZ;
+      }
     }, transTimeout);
+    // keep updating light position while the widget transitions
+    startPowerLightFollowLoop(transTimeout + 200);
   } else {
     isTransitioning = false;
   }
@@ -856,6 +868,113 @@ function setStatus(active, level) {
   statusEl.textContent = active ? `AUDIO ACTIVE ${pct}%` : `LISTENING ${pct}%`;
   statusEl.dataset.state = active ? 'active' : 'idle';
   if (widgetEl) widgetEl.dataset.state = active ? 'active' : 'idle';
+  // update the power light with a small buffer to avoid flash noise
+  updatePowerLight(active);
+}
+
+let _powerLightTimer = null;
+let _powerLightOn = false;
+function setPowerLight(on) {
+  if (!powerLightEl) return;
+  _powerLightOn = !!on;
+  powerLightEl.classList.toggle('on', _powerLightOn);
+}
+
+function updatePowerLight(active) {
+  // If playback is actively playing, keep the light on continuously
+  if (playbackProgressState.playing) {
+    if (_powerLightTimer) { clearTimeout(_powerLightTimer); _powerLightTimer = null; }
+    setPowerLight(true);
+    return;
+  }
+
+  // If audio is recently active, show the light and delay turning it off
+  if (active) {
+    if (_powerLightTimer) { clearTimeout(_powerLightTimer); _powerLightTimer = null; }
+    setPowerLight(true);
+    return;
+  }
+
+  // Otherwise schedule turn-off with a small buffer so it doesn't flash
+  if (_powerLightTimer) clearTimeout(_powerLightTimer);
+  _powerLightTimer = setTimeout(() => {
+    setPowerLight(false);
+    _powerLightTimer = null;
+  }, 1100);
+}
+
+function updatePowerLightPosition() {
+  if (!powerLightEl || !armMountEl || !widgetEl) return;
+  const mountRect = armMountEl.getBoundingClientRect();
+  const widgetRect = widgetEl.getBoundingClientRect();
+  const lightW = Math.max(12, powerLightEl.offsetWidth || 14);
+  const lightH = Math.max(12, powerLightEl.offsetHeight || 14);
+  // place to the right of the mount (bolt) with small offset
+  // give the light more room in expanded/full views; avoid being squished in lid views
+  const baseOffset = (currentView === 'full' || currentView === 'mini') ? 22 : 12;
+  const xRaw = Math.round(mountRect.right - widgetRect.left + baseOffset);
+  // when the widget is transitioning, nudge the light further right so it
+  // doesn't cross the arm mount while the arm rotates/animates
+  const transNudge = (widgetEl && widgetEl.dataset && widgetEl.dataset.transitioning === 'true') ? 10 : 0;
+  const xRawAdjusted = xRaw + transNudge;
+  // clamp inside widget bounds (leave small margin)
+  const x = Math.min(Math.max(8, xRawAdjusted), Math.max(8, Math.round(widgetRect.width - lightW - 8)));
+  // align vertically to the bolt center
+  const y = Math.round((mountRect.top + mountRect.height / 2) - widgetRect.top - (lightH / 2));
+  powerLightEl.style.left = `${x}px`;
+  powerLightEl.style.top = `${y}px`;
+
+  // If the power light is visually covered by the sleeve during a transition,
+  // hide it immediately. Use elementFromPoint to detect the actual top element
+  // at the bulb center so we respond as soon as it crosses the border.
+  try {
+    const sleeveEl = document.getElementById('sleeve');
+    if (sleeveEl) {
+      const px = Math.round(widgetRect.left + x + (lightW / 2));
+      const py = Math.round(widgetRect.top + y + (lightH / 2));
+      const topEl = document.elementFromPoint(px, py);
+      const underSleeve = topEl && topEl.closest && !!topEl.closest('#sleeve');
+      const shouldHide = underSleeve && widgetEl.dataset && widgetEl.dataset.transitioning === 'true';
+      if (shouldHide) {
+        if (!powerLightEl.classList.contains('under-sleeve')) powerLightEl.classList.add('under-sleeve');
+      } else {
+        if (powerLightEl.classList.contains('under-sleeve')) powerLightEl.classList.remove('under-sleeve');
+      }
+    }
+  } catch (e) {}
+}
+
+let _powerLightFollowRaf = null;
+function startPowerLightFollowLoop(timeoutMs = 2000) {
+  if (_powerLightFollowRaf) return;
+  if (powerLightEl) {
+    // raise just above the arm/bolt during transitions so it doesn't get occluded
+    // but stay below the sleeve overlay. armMount z-index == 5, sleeve overlay == 6.
+    powerLightEl.dataset._prevZ = powerLightEl.style.zIndex || '';
+    powerLightEl.style.zIndex = '5';
+  }
+  const start = performance.now();
+  function tick(now) {
+    updatePowerLightPosition();
+    if (!isTransitioning && (!widgetEl || widgetEl.dataset.transitioning !== 'true')) {
+      // restore z-index
+      if (powerLightEl) {
+        powerLightEl.style.zIndex = powerLightEl.dataset._prevZ || '';
+        delete powerLightEl.dataset._prevZ;
+      }
+      _powerLightFollowRaf = null;
+      return;
+    }
+    if (now - start >= timeoutMs) {
+      if (powerLightEl) {
+        powerLightEl.style.zIndex = powerLightEl.dataset._prevZ || '';
+        delete powerLightEl.dataset._prevZ;
+      }
+      _powerLightFollowRaf = null; return;
+    }
+    _powerLightFollowRaf = requestAnimationFrame(tick);
+  }
+  _powerLightFollowRaf = requestAnimationFrame(tick);
 }
 
 function updateArcMotion(freqData, state, active, level) {

@@ -308,7 +308,7 @@
   border-radius: 999px;
   background: radial-gradient(circle at 32% 32%, rgba(255, 255, 255, 0.98), rgba(176, 186, 202, 0.98) 58%, rgba(114, 125, 143, 0.98));
   box-shadow: 0 0 0 1px rgba(96, 108, 126, 0.6), 0 3px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  z-index: 7;
+  z-index: 5;
   transition: left var(--shelf-duration) var(--drawer-ease);
 }
 
@@ -360,7 +360,7 @@
   height: 20px;
   transform: rotate(calc(-84deg + (var(--tonearm-track) * 20deg) + var(--tonearm-sway)));
   transform-origin: 0 50%;
-  z-index: 6;
+  z-index: 20; /* ensure tonearm (and light) render above armMount */
   pointer-events: none;
   border-radius: 999px;
   background:
@@ -395,6 +395,87 @@
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.1));
 }
+
+/* ── Power / input indicator light ──
+   Positioned inside #tonearm so it follows rotation and left-position
+   changes. It sits just right of the arm mount pivot and above the record. */
+#powerLight {
+  position: absolute;
+  /* positioned by JS to follow #armMount; default hidden until JS sets coords */
+  left: 0;
+  top: 0;
+  /* narrower, slightly shorter cylinder to avoid oval look */
+  width: 10px;
+  height: 18px;
+  border-radius: 6px;
+  /* crisp vertical cylinder: subtle top highlight, saturated core, dark base */
+  background: linear-gradient(180deg,
+    rgba(255,210,200,0.98) 0%,
+    rgba(230,110,90,0.98) 28%,
+    rgba(190,50,50,0.98) 56%,
+    rgba(72,20,20,0.98) 100%);
+  /* metallic bezel + subtle crisp shadow, reduced blur for less haze */
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 1px 2px rgba(0,0,0,0.36),
+    0 0 10px 3px rgba(140,30,30,0.45);
+  opacity: 0.2;
+  transform-origin: center;
+  z-index: 99999;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 180ms ease, box-shadow 180ms ease, left var(--shelf-duration) var(--drawer-ease), top var(--shelf-duration) var(--drawer-ease);
+}
+
+/* metallic rim (subtle) */
+#powerLight::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  right: -1px;
+  bottom: -1px;
+  border-radius: 8px;
+  border: 1px solid rgba(120,120,120,0.6);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset;
+  pointer-events: none;
+}
+
+/* specular highlight stripe for cylindrical shape */
+#powerLight::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 3px;
+  width: 3px;
+  height: 9px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.18));
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* when active, deepen red glow and raise brightness */
+#powerLight.on {
+  opacity: 1;
+  transform: translateY(-1px) scale(1.02);
+  /* concentrated red glow, less wide blur */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.36), 0 0 12px 4px rgba(160,30,30,0.64);
+}
+
+/* When the bulb should be visually occluded by the sleeve during transitions */
+#powerLight.under-sleeve {
+  opacity: 0 !important;
+  transform: translateY(0) scale(0.98) !important;
+  pointer-events: none;
+}
+/* ensure immediate hide (no transition) when under sleeve */
+#powerLight.under-sleeve {
+  transition: none !important;
+}
+
+/* In lid and mini-lid views the light should be hidden under the sleeve/glass */
+#widget[data-view="lid"] #powerLight,
+#widget[data-view="mini-lid"] #powerLight { z-index: 2; }
 
 /* Lid view: arm and mount retract to narrower left column */
 #widget[data-view="lid"] #armMount {
