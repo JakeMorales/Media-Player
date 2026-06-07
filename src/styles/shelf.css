@@ -1,0 +1,529 @@
+/* ============================================================
+   shelf.css — Stats shelf: peeks from the left edge of the widget,
+               slides out to reveal full identity / session stats.
+   ============================================================ */
+
+/* ─── Custom properties ─────────────────────────────────────── */
+
+:root {
+  --shelf-tab-w:  36px;   /* visible peeking strip when closed            */
+  --shelf-open-w: 210px;  /* full panel width when open (tab + content)   */
+  --shelf-ease:   cubic-bezier(0.34, 1.12, 0.64, 1);
+  --shelf-ms:     380ms;
+  --shelf-radius: 14px;   /* matches widget border-radius                 */
+}
+
+/* ─── Outer shell ────────────────────────────────────────────── */
+/*
+ * The shelf is absolutely positioned so its RIGHT edge is flush with the
+ * widget's left edge. Normally only --shelf-tab-w peeks out (negative
+ * translateX exposes just the tab). On open it slides fully into view.
+ *
+ * It runs the full HEIGHT of the widget via inset-block: 0.
+ */
+
+#statsShelf {
+  display: none;
+
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--shelf-open-w);
+
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+
+  border-radius: 0 var(--shelf-radius) var(--shelf-radius) 0;
+  border: 1px solid rgba(145, 165, 192, 0.52);
+  border-left: none;
+
+  /* Frosted panel body */
+  background:
+    linear-gradient(180deg, rgba(240, 247, 255, 0.86), rgba(210, 226, 244, 0.78));
+  box-shadow:
+    6px 0 18px rgba(0, 0, 0, 0.14),
+    inset  0  1px 0 rgba(255, 255, 255, 0.82),
+    inset  0 -1px 0 rgba(100, 120, 148, 0.22);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+
+  /* Closed: slide the panel left so only the tab strip (--shelf-tab-w)
+     remains visible at the widget's left edge. The tab is the LEFTmost
+     slice of the panel, so we shift left by (open-w - tab-w). */
+  transform: translateX(calc((var(--shelf-open-w) - var(--shelf-tab-w)) * -1));
+  transition:
+    transform var(--shelf-ms) var(--shelf-ease),
+    box-shadow var(--shelf-ms) ease;
+
+  /* Behind the widget's own content layers but above the desktop.
+     Must stay negative to avoid disturbing the record's compositor layer. */
+  z-index: -1;
+  pointer-events: auto;
+
+  /* Clip so content doesn't bleed past the panel on the right */
+  overflow: hidden;
+}
+
+/* Open state — slide right so the full panel is visible to the left of
+   the widget. A small portion tucks under the left edge for anchorage. */
+#statsShelf[data-open="true"] {
+  transform: translateX(0);
+  box-shadow:
+    6px 0 18px rgba(0, 0, 0, 0.22),
+    inset  0  1px 0 rgba(255, 255, 255, 0.82),
+    inset  0 -1px 0 rgba(100, 120, 148, 0.22);
+}
+
+/* ─── Tab strip (left peeking finger) ──────────────────────── */
+
+#shelfTab {
+  flex: 0 0 var(--shelf-tab-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 0;
+  position: relative;
+  /* Subtle right-edge bevel (tab is on the left, content to its right) */
+  border-left: 1px solid rgba(155, 180, 210, 0.28);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.06) 100%);
+
+  /* Hover shimmer */
+  transition: background 180ms ease;
+}
+
+#shelfTab:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.30) 0%,
+    rgba(255, 255, 255, 0.12) 100%);
+}
+
+/* Collapse arrow — points right (closed = pointing into widget) and
+   rotates 180° to point left (open = pointing back to close) */
+#shelfTab .shelf-arrow {
+  width: 10px;
+  height: 10px;
+  opacity: 0.50;
+  flex-shrink: 0;
+  transition: transform var(--shelf-ms) var(--shelf-ease), opacity 180ms ease;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: rgba(36, 56, 88, 0.72);
+  /* Flip horizontally so chevron points RIGHT toward the widget */
+  transform: rotate(180deg);
+}
+
+#statsShelf[data-open="true"] #shelfTab .shelf-arrow {
+  transform: rotate(0deg);
+  opacity: 0.75;
+}
+
+/* ─── Avatar / badge thumbnails ─────────────────────────────── */
+
+.shelf-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(90, 130, 200, 0.28), rgba(60, 100, 170, 0.18));
+  border: 1px solid rgba(120, 160, 210, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 9px/1 "Segoe UI", sans-serif;
+  color: rgba(36, 60, 100, 0.82);
+  text-align: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* Streak badge — highlighted with a warm amber ring */
+#shelfStreakBadge {
+  background: linear-gradient(135deg, rgba(255, 195, 40, 0.38), rgba(240, 155, 20, 0.28));
+  border-color: rgba(220, 160, 30, 0.52);
+  color: rgba(80, 44, 0, 0.90);
+}
+
+/* Source dot — small colour dot per listening source */
+#shelfSourceDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--source-accent, rgba(80, 130, 200, 0.5));
+  border: 1.5px solid rgba(255, 255, 255, 0.68);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  flex-shrink: 0;
+}
+
+/* Divider line between tab badges */
+.shelf-tab-divider {
+  width: 18px;
+  height: 1px;
+  background: rgba(130, 155, 185, 0.28);
+  flex-shrink: 0;
+}
+
+/* ─── Content panel ──────────────────────────────────────────── */
+
+#shelfContent {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 14px 12px 12px 10px;
+  gap: 14px;
+  overflow: hidden;
+
+  /* Fades in slightly after the shelf opens */
+  opacity: 0;
+  transform: translateX(8px);
+  transition:
+    opacity  220ms ease calc(var(--shelf-ms) * 0.45),
+    transform 260ms var(--shelf-ease) calc(var(--shelf-ms) * 0.35);
+  pointer-events: none;
+}
+
+#statsShelf[data-open="true"] #shelfContent {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* ─── Section heading ────────────────────────────────────────── */
+
+.shelf-heading {
+  font: 700 8px/1 "Courier New", Consolas, monospace;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(50, 72, 104, 0.42);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.88);
+  user-select: none;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(120, 150, 190, 0.18);
+}
+
+/* ─── Streak card ─────────────────────────────────────────────── */
+
+.shelf-streak-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#shelfStreakValue {
+  font: 800 22px/1 "Segoe UI", sans-serif;
+  color: rgba(36, 56, 88, 0.96);
+  letter-spacing: -0.5px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+  /* Flame emoji sits inline */
+}
+
+#shelfStreakValue::before {
+  content: "🔥 ";
+  font-size: 16px;
+}
+
+#shelfStreakSubtitle {
+  font: 500 10px/1.25 "Segoe UI", sans-serif;
+  color: rgba(60, 80, 112, 0.64);
+  letter-spacing: 0.1px;
+}
+
+/* ─── Today summary card ──────────────────────────────────────── */
+
+.shelf-today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#shelfTodayLabel {
+  font: 600 9px/1 "Segoe UI", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(50, 72, 104, 0.44);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+#shelfTodaySummary {
+  font: 600 11px/1.4 "Segoe UI", sans-serif;
+  color: rgba(36, 56, 88, 0.86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Session mini-bar ────────────────────────────────────────── */
+
+.shelf-session-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+#shelfSessionDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(30, 160, 100, 0.40);
+  border: 1.5px solid rgba(20, 140, 80, 0.52);
+  flex-shrink: 0;
+  transition: background 400ms ease, border-color 400ms ease;
+}
+
+#shelfSessionDot[data-active="true"] {
+  background: rgba(30, 200, 110, 0.78);
+  border-color: rgba(18, 170, 88, 0.82);
+  box-shadow: 0 0 5px rgba(30, 200, 110, 0.46);
+}
+
+#shelfSessionLabel {
+  font: 500 9.5px/1 "Segoe UI", sans-serif;
+  color: rgba(50, 72, 104, 0.58);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+/* ─── Theme overrides ────────────────────────────────────────── */
+
+/* Dark */
+#widget[data-theme="dark"] #statsShelf {
+  background: linear-gradient(180deg, rgba(26, 38, 58, 0.92), rgba(16, 26, 44, 0.88));
+  border-color: rgba(80, 110, 155, 0.44);
+  box-shadow:
+    6px 0 18px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(80, 110, 155, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+}
+#widget[data-theme="dark"] #statsShelf[data-open="true"] {
+  box-shadow:
+    6px 4px 28px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(80, 110, 155, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+}
+#widget[data-theme="dark"] #shelfTab {
+  border-left-color: rgba(80, 110, 155, 0.24);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+}
+#widget[data-theme="dark"] #shelfTab:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%);
+}
+#widget[data-theme="dark"] #shelfTab .shelf-arrow {
+  color: rgba(180, 210, 248, 0.60);
+}
+#widget[data-theme="dark"] .shelf-avatar {
+  background: linear-gradient(135deg, rgba(60, 100, 170, 0.38), rgba(40, 70, 140, 0.28));
+  border-color: rgba(80, 130, 200, 0.38);
+  color: rgba(180, 210, 248, 0.88);
+}
+#widget[data-theme="dark"] #shelfStreakBadge {
+  background: linear-gradient(135deg, rgba(200, 140, 20, 0.42), rgba(160, 100, 10, 0.30));
+  border-color: rgba(200, 150, 30, 0.55);
+  color: rgba(255, 215, 100, 0.95);
+}
+#widget[data-theme="dark"] .shelf-heading {
+  color: rgba(160, 195, 235, 0.36);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5);
+  border-bottom-color: rgba(80, 120, 170, 0.18);
+}
+#widget[data-theme="dark"] #shelfStreakValue {
+  color: rgba(210, 232, 255, 0.96);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+#widget[data-theme="dark"] #shelfStreakSubtitle,
+#widget[data-theme="dark"] #shelfTodayLabel {
+  color: rgba(150, 185, 225, 0.55);
+}
+#widget[data-theme="dark"] #shelfTodaySummary {
+  color: rgba(200, 222, 248, 0.88);
+}
+#widget[data-theme="dark"] #shelfSessionLabel {
+  color: rgba(150, 185, 225, 0.52);
+}
+#widget[data-theme="dark"] .shelf-tab-divider {
+  background: rgba(80, 120, 170, 0.22);
+}
+
+/* Cream */
+#widget[data-theme="cream"] #statsShelf {
+  background: linear-gradient(180deg, rgba(255, 248, 226, 0.90), rgba(234, 218, 186, 0.82));
+  border-color: rgba(160, 130, 80, 0.48);
+  box-shadow:
+    6px 0 18px rgba(60, 40, 10, 0.14),
+    inset 0 1px 0 rgba(255, 252, 238, 0.88),
+    inset 0 -1px 0 rgba(140, 110, 60, 0.20);
+}
+#widget[data-theme="cream"] #statsShelf[data-open="true"] {
+  box-shadow:
+    6px 4px 28px rgba(60, 40, 10, 0.20),
+    inset 0 1px 0 rgba(255, 252, 238, 0.88),
+    inset 0 -1px 0 rgba(140, 110, 60, 0.20);
+}
+#widget[data-theme="cream"] #shelfTab {
+  border-left-color: rgba(160, 130, 80, 0.22);
+}
+#widget[data-theme="cream"] #shelfTab .shelf-arrow {
+  color: rgba(80, 54, 16, 0.60);
+}
+#widget[data-theme="cream"] .shelf-avatar {
+  background: linear-gradient(135deg, rgba(180, 130, 50, 0.28), rgba(150, 100, 30, 0.18));
+  border-color: rgba(180, 140, 70, 0.42);
+  color: rgba(72, 44, 8, 0.84);
+}
+#widget[data-theme="cream"] #shelfStreakBadge {
+  background: linear-gradient(135deg, rgba(220, 160, 30, 0.42), rgba(190, 120, 10, 0.28));
+  border-color: rgba(200, 145, 25, 0.58);
+  color: rgba(70, 40, 0, 0.92);
+}
+#widget[data-theme="cream"] .shelf-heading {
+  color: rgba(72, 50, 16, 0.40);
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.9);
+  border-bottom-color: rgba(160, 120, 60, 0.16);
+}
+#widget[data-theme="cream"] #shelfStreakValue {
+  color: rgba(48, 30, 8, 0.96);
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.7);
+}
+#widget[data-theme="cream"] #shelfStreakSubtitle,
+#widget[data-theme="cream"] #shelfTodayLabel {
+  color: rgba(90, 62, 22, 0.55);
+}
+#widget[data-theme="cream"] #shelfTodaySummary {
+  color: rgba(58, 36, 10, 0.88);
+}
+#widget[data-theme="cream"] #shelfSessionLabel {
+  color: rgba(90, 62, 22, 0.52);
+}
+#widget[data-theme="cream"] .shelf-tab-divider {
+  background: rgba(160, 120, 60, 0.20);
+}
+
+/* Pastel */
+#widget[data-theme="pastel"] #statsShelf {
+  background: linear-gradient(180deg, rgba(228, 242, 255, 0.90), rgba(200, 222, 248, 0.80));
+  border-color: rgba(110, 148, 210, 0.44);
+  box-shadow:
+    6px 0 18px rgba(30, 50, 100, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(80, 120, 190, 0.18);
+}
+#widget[data-theme="pastel"] #statsShelf[data-open="true"] {
+  box-shadow:
+    6px 4px 28px rgba(30, 50, 100, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(80, 120, 190, 0.18);
+}
+#widget[data-theme="pastel"] #shelfTab {
+  border-left-color: rgba(110, 148, 210, 0.22);
+}
+#widget[data-theme="pastel"] #shelfTab .shelf-arrow {
+  color: rgba(36, 64, 130, 0.58);
+}
+#widget[data-theme="pastel"] .shelf-avatar {
+  background: linear-gradient(135deg, rgba(100, 140, 220, 0.30), rgba(70, 110, 195, 0.20));
+  border-color: rgba(110, 148, 220, 0.42);
+  color: rgba(24, 48, 108, 0.84);
+}
+#widget[data-theme="pastel"] #shelfStreakBadge {
+  background: linear-gradient(135deg, rgba(210, 170, 50, 0.38), rgba(185, 140, 25, 0.28));
+  border-color: rgba(200, 158, 30, 0.55);
+  color: rgba(60, 36, 0, 0.90);
+}
+#widget[data-theme="pastel"] .shelf-heading {
+  color: rgba(30, 58, 110, 0.38);
+  text-shadow: 0 1px 0 rgba(240, 248, 255, 0.9);
+  border-bottom-color: rgba(100, 145, 210, 0.16);
+}
+#widget[data-theme="pastel"] #shelfStreakValue {
+  color: rgba(20, 42, 90, 0.96);
+  text-shadow: 0 1px 0 rgba(240, 248, 255, 0.7);
+}
+#widget[data-theme="pastel"] #shelfStreakSubtitle,
+#widget[data-theme="pastel"] #shelfTodayLabel {
+  color: rgba(44, 70, 130, 0.55);
+}
+#widget[data-theme="pastel"] #shelfTodaySummary {
+  color: rgba(24, 48, 96, 0.88);
+}
+#widget[data-theme="pastel"] #shelfSessionLabel {
+  color: rgba(44, 70, 130, 0.50);
+}
+#widget[data-theme="pastel"] .shelf-tab-divider {
+  background: rgba(100, 145, 210, 0.18);
+}
+
+/* Transparent */
+#widget[data-theme="transparent"] #statsShelf {
+  /* Match the widget's translucent glass more closely — lighter, cooler. */
+  background:
+    linear-gradient(134deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02) 44%),
+    linear-gradient(180deg, rgba(204, 219, 238, 0.14), rgba(112, 136, 167, 0.08));
+  border-color: rgba(120, 170, 230, 0.30);
+  box-shadow:
+    6px 0 18px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(200, 225, 250, 0.22),
+    inset 0 -1px 0 rgba(40, 60, 90, 0.32);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+}
+#widget[data-theme="transparent"] #statsShelf[data-open="true"] {
+  box-shadow:
+    6px 4px 28px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(120, 180, 240, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+}
+#widget[data-theme="transparent"] #shelfTab {
+  border-left-color: rgba(100, 160, 220, 0.14);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+}
+#widget[data-theme="transparent"] #shelfTab:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 100%);
+}
+#widget[data-theme="transparent"] #shelfTab .shelf-arrow {
+  color: rgba(180, 215, 252, 0.55);
+}
+#widget[data-theme="transparent"] .shelf-avatar {
+  background: linear-gradient(135deg, rgba(50, 90, 170, 0.38), rgba(30, 60, 140, 0.28));
+  border-color: rgba(80, 140, 210, 0.32);
+  color: rgba(180, 215, 252, 0.90);
+}
+#widget[data-theme="transparent"] #shelfStreakBadge {
+  background: linear-gradient(135deg, rgba(190, 130, 20, 0.42), rgba(150, 100, 10, 0.30));
+  border-color: rgba(190, 140, 25, 0.52);
+  color: rgba(255, 210, 80, 0.96);
+}
+#widget[data-theme="transparent"] .shelf-heading {
+  color: rgba(160, 200, 240, 0.30);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5);
+  border-bottom-color: rgba(80, 140, 210, 0.14);
+}
+#widget[data-theme="transparent"] #shelfStreakValue {
+  color: rgba(210, 232, 255, 0.96);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+#widget[data-theme="transparent"] #shelfStreakSubtitle,
+#widget[data-theme="transparent"] #shelfTodayLabel {
+  color: rgba(150, 195, 240, 0.50);
+}
+#widget[data-theme="transparent"] #shelfTodaySummary {
+  color: rgba(195, 222, 252, 0.88);
+}
+#widget[data-theme="transparent"] #shelfSessionLabel {
+  color: rgba(150, 195, 240, 0.46);
+}
+#widget[data-theme="transparent"] .shelf-tab-divider {
+  background: rgba(80, 140, 210, 0.16);
+}

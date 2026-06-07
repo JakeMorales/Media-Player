@@ -20,17 +20,20 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     inset 0 -1px 0 rgba(112, 124, 142, 0.35);
   pointer-events: none;
-  overflow: hidden;
+  /* overflow:visible + clip-path lets the stats shelf peek out from the left
+     while still containing the widget's own content on the other three sides.
+     -999px on the left side = no clipping leftward; 0 everywhere else = tight clip. */
+  overflow: visible;
+  clip-path: inset(0 0 0 -999px);
   transition: width var(--shelf-duration) var(--drawer-ease), box-shadow var(--shelf-duration) ease;
 }
 
 #widget[data-transitioning="true"] {
-  overflow: visible; /* Allow record to extend beyond shrinking right edge during animation */
-  /* clip-path clips top/bottom shadow bleed from the record (box-shadow can escape
-     when overflow:visible) while still allowing horizontal overflow for the record. */
+  /* During record open/close let the record bleed right as well */
   clip-path: inset(0 -999px 0 -999px);
   transition: width var(--shelf-duration) var(--drawer-ease), box-shadow var(--shelf-duration) ease;
 }
+
 
 /* ── Theme variants ── */
 

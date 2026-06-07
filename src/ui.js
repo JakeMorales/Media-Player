@@ -630,6 +630,17 @@ function initUI() {
     if (quickMenuOpen && !ev.target.closest('#glassQuickMenu, #glassMenuBtn')) setQuickMenuOpen(false);
   });
 
+  // Stats shelf toggle
+  const shelfTabEl = document.getElementById('shelfTab');
+  const statsShelfEl = document.getElementById('statsShelf');
+  if (shelfTabEl && statsShelfEl) {
+    shelfTabEl.addEventListener('click', () => {
+      const open = statsShelfEl.dataset.open === 'true';
+      statsShelfEl.dataset.open = open ? 'false' : 'true';
+      shelfTabEl.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+  }
+
   setWidgetInteractive(false);
   loadLaunchSetting();
 }

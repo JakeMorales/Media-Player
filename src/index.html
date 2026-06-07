@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="styles/ui.css">
   <link rel="stylesheet" href="styles/animations.css">
   <link rel="stylesheet" href="styles/responsive.css">
+
 </head>
 <body>
   <div id="widget" data-state="idle">
@@ -188,6 +189,14 @@
         </div>
       </div>
       <div class="settingsRow">
+        <label for="visualizerModeSelect">Visualizer</label>
+        <select id="visualizerModeSelect">
+          <option value="bars">Bars</option>
+          <option value="waveform">Waveform</option>
+          <option value="shader">Shader</option>
+        </select>
+      </div>
+      <div class="settingsRow">
         <label for="scaleSlider">Scale</label>
         <input id="scaleSlider" type="range" min="70" max="135" step="1" value="100">
       </div>
@@ -209,6 +218,8 @@
       </div>
     </div>
     <div id="resizeHandle" aria-hidden="true"></div>
+
+
   </div>
   <script src="app.js"></script>
 </body>

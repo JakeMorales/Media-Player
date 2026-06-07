@@ -24,28 +24,54 @@ A lightweight Electron-based desktop overlay combining a real-time audio visuali
 ├── main.js                  Electron main process — window, tray, IPC, media sessions, volume
 ├── package.json
 └── src/
-    ├── index.html           Renderer entry point + all widget HTML
-    ├── app.js               All renderer logic: state, animations, IPC handlers, RAF loop
-    ├── config.js            User-tunable defaults
-    ├── audio.js             Web Audio API module (FFT analyser, loopback capture)
-    ├── renderer.js          Three.js WebGL renderer setup
-    ├── visualizer.js        Three.js visualizer modes (bars / waveform / shader)
+    ├── index.html               Renderer entry point + all widget HTML
+    ├── app.js                   Renderer orchestrator (modules, IPC bridge, RAF loop)
+    ├── config.js                User-tunable defaults (FFT, colours, widget sizing)
+    ├── audio.js                 Web Audio API module (FFT analyser, loopback capture)
+    ├── renderer.js              Three.js WebGL renderer setup
+    ├── visualizer.js            Three.js visualizer modes (bars / waveform / shader)
+    ├── visualizer-controller.js Visualizer mode + config controller
+    ├── ambient-controller.js    Ambient / overlay behaviour policy
+    ├── player.js                Metadata model, playback progress, source inference
+    ├── transport.js             Media transport controls wiring (prev / play-pause / next)
+    ├── volume-control.js        System volume knob + glass slider + mute
+    ├── ui.js                    Widget layout, views (full / lid / mini / mini-lid), drag/resize, settings
+    ├── art-transition.js        Record burn / sleeve cross-dissolve / mini art fade
+        ├── label-theme.js           Album-art-driven record label theming
+    ├── spectrum-canvas.js       Glass + mini canvas spectrum renderers
+    ├── models/
+    │   ├── listening-stats.js   Data models for listening stats (Phase 2)
+    │   ├── vibes.js             Data models for vibe badges & summaries (Phase 2)
+    │   └── social-feed.js       Data models for friend activity items (Phase 3)
+    ├── stats/
+    │   ├── session-tracker.js   Passive session capture from OS metadata → ListeningSample[]
+    │   ├── aggregator.js        Pure helpers to build daily ListeningStatsSnapshot[]
+    │   └── runtime-store.js     In-memory cache for daily stats (future UI entrypoint)
+
+        ├── spectrum-canvas.js       Glass + mini canvas spectrum renderers
+    ├── identity-panel.js        Phase 2 identity stats (today + streak UI; currently disabled)
+
+    ├── main/
+
+    │   ├── media-control-ps.js  PowerShell helpers for media transport
+    │   └── volume-ps.js         PowerShell helpers for system volume
     ├── shaders/
-    │   ├── vertex.glsl      Passthrough vertex shader
-    │   └── fragment.glsl    Audio-reactive fragment shader
+    │   ├── vertex.glsl          Passthrough vertex shader
+    │   └── fragment.glsl        Audio-reactive fragment shader
     └── styles/
-        ├── base.css         CSS reset and root custom properties / design tokens
-        ├── widget.css       Widget frame and surface
-        ├── layout.css       Deck grid, left/right pane, view transitions
-        ├── controls.css     Transport buttons, settings panel, source knob
-        ├── sleeve.css       Album art sleeve and cross-dissolve transition
-        ├── glass.css        Glass overlay panel (lid view)
-        ├── record.css       Vinyl record disc, grooves, label, tonearm, burn-mask animation
-        ├── mini.css         Mini mode compact pane
-        ├── ui.css           Misc overlay elements
-        ├── animations.css   All @keyframes + CSS Houdini @property vars
-        └── responsive.css   Scale and resize behaviour
+        ├── base.css             CSS reset and root custom properties / design tokens
+        ├── widget.css           Widget frame and surface
+        ├── layout.css           Deck grid, left/right pane, view transitions
+        ├── controls.css         Transport buttons, settings panel, source knob
+        ├── sleeve.css           Album art sleeve and cross-dissolve transition
+        ├── glass.css            Glass overlay panel (lid view)
+        ├── record.css           Vinyl record disc, grooves, label, tonearm, burn-mask animation
+        ├── mini.css             Mini mode compact pane
+        ├── ui.css               Misc overlay elements
+        ├── animations.css       All @keyframes + CSS Houdini @property vars
+        └── responsive.css       Scale and resize behaviour
 ```
+
 
 ---
 
@@ -82,7 +108,7 @@ npm run dev      # dev mode: opens DevTools, restarts on main.js changes, hot-re
 
 ## Views
 
-The widget has three display modes controlled by `data-view` on `#widget`:
+The widget has four display modes controlled by `data-view` on `#widget`:
 
 ### `full` — Vinyl deck
 Left pane: track metadata, transport controls, settings button, WebGL bar visualizer.
@@ -94,6 +120,10 @@ The record "closes" into a slot behind a frosted glass panel showing title, arti
 
 ### `mini` — Compact bar
 A slim bar showing album art thumbnail (with spectrum ring overlay), track title, artist, playback progress, and mini transport buttons. Can be toggled from the settings panel or quick menu.
+
+### `mini-lid` — Compact glass overlay
+A lid-style overlay variant of mini mode. The mini bar remains primary, with additional metadata and controls revealed on hover.
+
 
 ---
 
@@ -180,7 +210,7 @@ Place a **32×32 PNG** at `assets/icon.png` to replace the invisible fallback ic
 
 ## Architecture Notes
 
-- **One RAF loop** drives audio reads, WebGL rendering, and Canvas 2D spectrum updates
+- **One RAF loop** drives audio reads, WebGL rendering, Canvas 2D spectrum updates, and ambient view decisions
 - **Zero typed-array allocation per frame** — FFT buffers and spectrum level arrays are pre-allocated
 - `InstancedMesh` for bars = one GPU draw call regardless of bar count
 - FFT data passed to GLSL shader as a `DataTexture` (texture upload, not a uniforms array)
@@ -188,6 +218,9 @@ Place a **32×32 PNG** at `assets/icon.png` to replace the invisible fallback ic
 - CSS `@property` (Houdini) lets Chromium interpolate custom properties inside `calc()` inside `mask-image` — enabling the per-hole burn animation without any JavaScript per frame
 - `img.decode()` is used before any artwork swap to ensure the image is fully paint-ready, preventing 1–2 frame blank flashes that `onload` alone cannot prevent
 - All async art-transition callbacks carry a generation token (`_artBurnGen`) and self-cancel if superseded, preventing race conditions during rapid track changes
+- `visualizer-controller.js` wraps config and mode selection so visualizer behaviour can be changed without touching renderer code
+- `ambient-controller.js` implements a conservative one-way ambient policy: after prolonged idle time, `full` view transitions to `lid` without ever forcing a return
+
 
 ---
 

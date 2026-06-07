@@ -67,9 +67,12 @@ function openMetadataUrl(kind) {
 let _els = {};
 let _onAlbumMarquee = null;
 let _uiThemeGetter = null;
+const sessionTracker = require('./stats/session-tracker');
 
 function setMetadata(meta) {
   const prevTrackKey = playbackProgressState.trackKey;
+  const prevStatus   = currentMeta.playbackStatus || 'paused';
+
 
   currentMeta.appId          = meta.appId || '';
   currentMeta.title          = meta.title || '';
@@ -113,10 +116,23 @@ function setMetadata(meta) {
 
   const fallbackDuration = 3 * 60 * 1000;
   const duration = currentMeta.durationMs > 0 ? currentMeta.durationMs : fallbackDuration;
-  playbackProgressState.durationMs = duration;
+    playbackProgressState.durationMs = duration;
   playbackProgressState.positionMs = clamp(currentMeta.positionMs || 0, 0, duration);
 
+  // Stats pipeline hook (Phase 2): passively record listening sessions.
+  try {
+    sessionTracker.onMetadataChanged({
+      prevTrackKey,
+      prevStatus,
+      meta: Object.assign({}, currentMeta),
+      playbackProgressState: Object.assign({}, playbackProgressState)
+    });
+  } catch (_) {
+    // Stats are best-effort and must never interfere with playback or UI.
+  }
+
   const isDarkTheme = _uiThemeGetter ? ['dark', 'transparent'].includes(_uiThemeGetter()) : false;
+
   document.documentElement.style.setProperty('--label-panel-rgb', isDarkTheme ? '230, 238, 248' : '255, 248, 216');
 
   if (_onAlbumMarquee) _onAlbumMarquee();

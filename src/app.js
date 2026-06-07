@@ -1,170 +1,198 @@
 'use strict';
 
-// app.js - Orchestrator: wires modules, metadata bridge, render loop
+// src/app.js — Renderer bootstrap
+// Wires together UI, audio/visualizer, metadata polling, ambient behaviour,
+// and identity panel. Runs in the renderer; all main-process work lives in
+// main.js.
 
-const cfg            = require('./config');
-const { initAudio }  = require('./audio');
-const { initRenderer }   = require('./renderer');
-const { initVisualizer } = require('./visualizer');
-const { ipcRenderer }    = require('electron');
+const { ipcRenderer }       = require('electron');
+const cfg                   = require('./config');
+const ui                    = require('./ui');
+const audio                 = require('./audio');
+const { initRenderer }      = require('./renderer');
+const { initVisualizer }    = require('./visualizer');
+const ambientController     = require('./ambient-controller');
+const spectrumCanvas        = require('./spectrum-canvas');
+const player                = require('./player');
+const transport             = require('./transport');
+const volumeControl         = require('./volume-control');
+const labelTheme            = require('./label-theme');
+const artTransition         = require('./art-transition');
+const visualizerController  = require('./visualizer-controller');
 
-const labelTheme     = require('./label-theme');
-const artTransition  = require('./art-transition');
-const spectrumCanvas = require('./spectrum-canvas');
-const volumeControl  = require('./volume-control');
-const transport      = require('./transport');
-const player         = require('./player');
-const ui             = require('./ui');
+(async function bootstrap() {
+  // --- UI shell ---------------------------------------------------------
 
-// --- Init UI ---
+  ui.initUI();
 
-ui.initUI();
+  // Label theming + record art transitions
+  labelTheme.init(ui.rootStyle);
+  artTransition.init({
+    recordArtEl:    ui.el.recordArtEl,
+    recordArtNewEl: ui.el.recordArtNewEl,
+    sleeveArtEl:    ui.el.sleeveArtEl,
+    sleeveArtNewEl: ui.el.sleeveArtNewEl,
+    miniArtEl:      ui.el.miniArtEl
+  }, () => player.playbackProgressState.trackKey);
 
-// --- Init label theme ---
+  // Spectrum canvases (glass ring + mini strip)
+  spectrumCanvas.init({
+    glassSpectrumEl: ui.el.glassSpectrumEl,
+    miniSpectrumEl:  ui.el.miniSpectrumEl,
+    miniArtEl:       ui.el.miniArtEl,
+    recordEl:        ui.el.recordEl
+  }, ui.getCurrentView);
 
-labelTheme.init(ui.rootStyle);
+  // Ambient behaviour — idle full → lid
+  ambientController.init({ idleToLidMs: 60000 });
 
-// --- Init art transition ---
-
-artTransition.init(
-  { recordArtEl: ui.el.recordArtEl, recordArtNewEl: ui.el.recordArtNewEl,
-    sleeveArtEl: ui.el.sleeveArtEl, sleeveArtNewEl: ui.el.sleeveArtNewEl,
-    miniArtEl: ui.el.miniArtEl },
-  () => player.playbackProgressState.trackKey
-);
-
-// --- Init spectrum canvas ---
-
-spectrumCanvas.init(
-  { glassSpectrumEl: ui.el.glassSpectrumEl, miniSpectrumEl: ui.el.miniSpectrumEl,
-    miniArtEl: ui.el.miniArtEl, recordEl: ui.el.recordEl },
-  () => ui.getCurrentView()
-);
-
-// --- Init player (inject DOM refs + callbacks) ---
-
-player.init(
-  { artistEl: ui.el.artistEl, albumEl: ui.el.albumEl, albumTextEl: ui.el.albumTextEl,
-    titleEl: ui.el.titleEl, glassTitleEl: ui.el.glassTitleEl, glassArtistEl: ui.el.glassArtistEl,
-    glassAlbumEl: ui.el.glassAlbumEl, miniTitleEl: ui.el.miniTitleEl, miniArtistEl: ui.el.miniArtistEl,
-    miniProgressFillEl: ui.el.miniProgressFillEl,
-    labelTitleEl: ui.el.labelTitleEl, labelArtistEl: ui.el.labelArtistEl },
-  { onAlbumMarquee: ui.updateAlbumMarqueeState,
-    uiThemeGetter: () => ui.getUiState().theme }
-);
-
-// --- Init frame height ---
-
-if (ui.el.frameEl) ui.el.frameEl.style.height = `${cfg.widget.barsHeight}px`;
-
-// --- Init transport ---
-
-transport.init({
-  ipcRenderer,
-  elements: {
-    btnPrevEl: ui.el.btnPrevEl, btnPlayPauseEl: ui.el.btnPlayPauseEl, btnNextEl: ui.el.btnNextEl,
-    btnPrevGlassEl: ui.el.btnPrevGlassEl, btnPlayPauseGlassEl: ui.el.btnPlayPauseGlassEl, btnNextGlassEl: ui.el.btnNextGlassEl,
-    btnPrevMiniEl: ui.el.btnPrevMiniEl, btnPlayPauseMiniEl: ui.el.btnPlayPauseMiniEl, btnNextMiniEl: ui.el.btnNextMiniEl,
-    btnMiniCollapseEl: ui.el.btnMiniCollapseEl
-  },
-  onMiniCollapseViewChange() {
-    ui.setSuppressFlag(true);
-    ui.setCurrentView('lid');
-    ui.applyWidgetSize();
-    spectrumCanvas.updateGlassSpectrumGeometry(true);
-  }
-});
-
-// --- Init volume control ---
-
-volumeControl.init({
-  ipcRenderer,
-  rootStyle: ui.rootStyle,
-  elements: {
-    sourceKnobEl: ui.el.sourceKnobEl, sourceVolumeGlassEl: ui.el.sourceVolumeGlassEl,
-    volumeBtnGlassEl: ui.el.volumeBtnGlassEl, volumeValueGlassEl: ui.el.volumeValueGlassEl
-  },
-  onInteraction: ui.setWidgetInteractive,
-  onRelease: () => ui.setWidgetInteractive(ui.isMouseOverWidget(ui.getLastMouse().x, ui.getLastMouse().y))
-});
-volumeControl.loadSystemVolume();
-
-// --- Metadata bridge ---
-
-async function startMetadataBridge() {
-  player.setMetadata({ artist: 'Waiting for media', album: '', title: 'Desktop audio session', artwork: '' });
-  try {
-    const initial = await ipcRenderer.invoke('media-meta:get');
-    if (initial) {
-      player.setMetadata({
-        appId: initial.appId || '', artist: initial.artist || 'Unknown Artist',
-        album: initial.album || '', title: initial.title || 'Unknown Track',
-        artwork: initial.artwork || '', playbackStatus: initial.playbackStatus || 'paused',
-        durationMs: initial.durationMs, positionMs: initial.positionMs,
-        controls: initial.controls || {}
-      });
+  // Transport wiring (prev / play-pause / next across views)
+  transport.init({
+    ipcRenderer,
+    elements: ui.el,
+    onMiniCollapseViewChange: () => {
+      // Collapse mini view back to lid view
+      const current = ui.getCurrentView();
+      if (current === 'mini' || current === 'mini-lid') {
+        ui.setCurrentView('lid');
+        ui.applyWidgetSize();
+        spectrumCanvas.updateGlassSpectrumGeometry(true);
+      }
     }
-  } catch {}
-
-  ipcRenderer.on('media-meta', (_, meta) => {
-    if (!meta) {
-      player.setMetadata({ artist: 'Waiting for media', album: '', title: 'Desktop audio session', artwork: '' });
-      return;
-    }
-    player.setMetadata({
-      appId: meta.appId || '', artist: meta.artist || 'Unknown Artist',
-      album: meta.album || '', title: meta.title || 'Unknown Track',
-      artwork: meta.artwork || '', playbackStatus: meta.playbackStatus || 'paused',
-      durationMs: meta.durationMs, positionMs: meta.positionMs,
-      controls: meta.controls || {}
-    });
   });
-}
 
-// --- Start ---
+  // Volume knob + glass slider
+  volumeControl.init({
+    ipcRenderer,
+    rootStyle: ui.rootStyle,
+    elements: {
+      sourceKnobEl:       ui.el.sourceKnobEl,
+      sourceVolumeGlassEl: ui.el.sourceVolumeGlassEl,
+      volumeBtnGlassEl:   ui.el.volumeBtnGlassEl,
+      volumeValueGlassEl: ui.el.volumeValueGlassEl
+    },
+    onInteraction: (interactive) => ui.setWidgetInteractive(interactive),
+    onRelease: () => ui.setWidgetInteractive(ui.isHovering())
+  });
+  volumeControl.loadSystemVolume();
 
-async function start() {
+  // Player metadata model
+  player.init({
+    artistEl:         ui.el.artistEl,
+    albumEl:          ui.el.albumEl,
+    albumTextEl:      ui.el.albumTextEl,
+    titleEl:          ui.el.titleEl,
+    glassTitleEl:     ui.el.glassTitleEl,
+    glassArtistEl:    ui.el.glassArtistEl,
+    glassAlbumEl:     ui.el.glassAlbumEl,
+    miniTitleEl:      ui.el.miniTitleEl,
+    miniArtistEl:     ui.el.miniArtistEl,
+    miniProgressFillEl: ui.el.miniProgressFillEl,
+    labelTitleEl:     ui.el.labelTitleEl,
+    labelArtistEl:    ui.el.labelArtistEl
+  }, {
+    onAlbumMarquee: ui.updateAlbumMarqueeState,
+    uiThemeGetter:  () => ui.getUiState().theme
+  });
+
+  // --- Three.js renderer + visualizer ----------------------------------
+
+  // Initialise visualizer controller with base config (mode, colours, etc.)
+  visualizerController.init(cfg);
+
+  const { renderer, scene, camera, resize } = initRenderer();
+
+  window.addEventListener('resize', () => {
+    ui.applyWidgetSize();
+    resize();
+    spectrumCanvas.updateGlassSpectrumGeometry(true);
+  });
+
+  let audioNode = null;
+  let vizUpdate = null;
+  let audioActivityState = { hotFrames: 0, coldFrames: 0, active: false };
+  let arcState = { bass: 0, pulse: 0 };
+
   try {
-    await startMetadataBridge();
-    const audio = await initAudio(cfg);
-    const { renderer, scene, camera, resize } = initRenderer();
-    const update = initVisualizer(scene, audio, cfg);
-    const detector = { active: false, hotFrames: 0, coldFrames: 0 };
-    const arcMotion = { bass: 0, pulse: 0 };
-
-    window.addEventListener('resize', () => {
-      ui.applyWidgetSize();
-      ui.updateAlbumMarqueeState();
-      spectrumCanvas.updateGlassSpectrumGeometry(true);
-      resize();
-    });
-
+    // Web Audio FFT capture
+    audioNode = await audio.initAudio(cfg);
     ipcRenderer.send('audio-started');
 
-    function loop() {
-      requestAnimationFrame(loop);
-      const freq = audio.getFreq();
-      const time = audio.getTime();
-      const now = performance.now();
-      const { active, level } = player.detectAudioActive(freq, detector, cfg);
-      ui.setStatus(active, level);
-      ui.updatePowerLight(active, player.playbackProgressState.playing);
-      player.updateArcMotion(freq, arcMotion, active, level);
-      spectrumCanvas.renderGlassSpectrum(freq, active, level);
-      spectrumCanvas.renderMiniSpectrum(freq, active);
-      player.updatePlaybackProgress(now);
-      update(freq, time);
+    // Visualizer config comes from visualizer-controller (mode, colours, etc.)
+    const vizCfg = visualizerController.getConfig();
+    vizUpdate = initVisualizer(scene, audioNode, vizCfg);
+  } catch (err) {
+    console.warn('Audio / visualizer initialisation failed:', err);
+  }
+
+  // --- Metadata polling -------------------------------------------------
+
+  async function pollMeta() {
+    try {
+      const meta = await ipcRenderer.invoke('media-meta:get');
+      if (meta) {
+        // player.setMetadata already feeds sessionTracker internally (Phase 2 hook)
+        player.setMetadata(meta);
+
+        // Keep the shelf session row live whenever new metadata arrives
+        if (typeof ui.refreshShelf === 'function') ui.refreshShelf();
+      }
+    } catch (_) {
+      // Metadata is best-effort; ignore errors.
+    }
+  }
+
+  pollMeta();
+  setInterval(pollMeta, cfg.metadata.pollMs);
+
+  // --- RAF loop ---------------------------------------------------------
+
+  const emptyFreq = new Uint8Array(256);
+
+  function frame(now) {
+    const hasAudio = !!(audioNode && vizUpdate);
+    const freqData = hasAudio ? audioNode.getFreq() : emptyFreq;
+    const timeData = hasAudio ? audioNode.getTime() : emptyFreq;
+
+    // Audio activity → status bar + power light
+    const activity = player.detectAudioActive(freqData, audioActivityState, cfg);
+    ui.setStatus(activity.active, activity.level);
+
+    // Record arc / tonearm motion
+    if (hasAudio) {
+      player.updateArcMotion(freqData, arcState, activity.active, activity.level);
+    }
+
+    // Visualizer & Three renderer
+    if (hasAudio) {
+      vizUpdate(freqData, timeData);
       renderer.render(scene, camera);
     }
-    loop();
-  } catch (err) {
-    console.error(err);
-    document.body.insertAdjacentHTML('beforeend',
-      `<div style="position:fixed;bottom:20px;left:20px;color:#ff4444;
-        font-family:monospace;font-size:12px;background:rgba(0,0,0,0.7);
-        padding:10px;border:1px solid #ff4444;">Error: ${err.message}</div>`
-    );
-  }
-}
 
-start();
+    // Ambient view controller (full → lid)
+    const nextView = ambientController.nextView({
+      now,
+      active: activity.active,
+      level: activity.level,
+      playing: player.currentMeta.playbackStatus === 'playing',
+      currentView: ui.getCurrentView(),
+      hovering: ui.isHovering()
+    });
+    if (nextView && nextView !== ui.getCurrentView()) {
+      ui.setCurrentView(nextView);
+      ui.applyWidgetSize();
+      spectrumCanvas.updateGlassSpectrumGeometry(true);
+    }
+
+    // Playback progress bar + tonearm
+    player.updatePlaybackProgress(now);
+
+    // Canvas spectra
+    spectrumCanvas.renderGlassSpectrum(freqData, activity.active, activity.level);
+    spectrumCanvas.renderMiniSpectrum(freqData, activity.active);
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();

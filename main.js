@@ -4,6 +4,8 @@ const fs = require('fs');
 const { getActiveSessions, getAllSessions, onSessionsChanged, shutdown } = require('windows-media-sessions');
 const { getSystemVolume, setSystemVolume } = require('./src/main/volume-ps');
 const { handleMediaControl } = require('./src/main/media-control-ps');
+const statsStore = require('./src/main/stats-store');
+
 
 let win, tray;
 let stopSessions = null;
@@ -154,10 +156,36 @@ ipcMain.on('overlay:hover-widget', (_, interactive) => {
 });
 
 ipcMain.handle('media-meta:get', () => latestMeta);
+
+// --- Stats persistence ---------------------------------------------------
+// Renderer session-tracker sends ListeningSample objects here; they are
+// stored on disk under userData/listening-samples.json. A separate IPC
+// endpoint exposes the full history back to the renderer so identity /
+// streak UI can span app restarts.
+ipcMain.handle('stats:append-samples', async (_event, samples) => {
+  try {
+    if (Array.isArray(samples) && samples.length) {
+      statsStore.appendSamples(samples);
+    }
+  } catch (_) {
+    // Stats persistence is best-effort; never throw back to renderer.
+  }
+  return true;
+});
+
+ipcMain.handle('stats:get-samples', () => {
+  try {
+    return statsStore.getAllSamples();
+  } catch (_) {
+    return [];
+  }
+});
+
 ipcMain.handle('system-volume:get', async () => getSystemVolume());
 ipcMain.handle('system-volume:set', async (_, level) => setSystemVolume(level));
 ipcMain.handle('media-control', async (_, action) => handleMediaControl(action));
 ipcMain.handle('settings:launch-on-start:get', () => {
+
   try {
     return app.getLoginItemSettings().openAtLogin;
   } catch {

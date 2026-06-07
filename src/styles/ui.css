@@ -69,8 +69,11 @@
   width: 118px;
 }
 
+
+
 .settingsAction {
   width: 100%;
+
   border: 1px solid rgba(143, 81, 81, 0.4);
   border-radius: 8px;
   background: linear-gradient(170deg, rgba(255, 237, 237, 0.9), rgba(241, 202, 202, 0.82));
