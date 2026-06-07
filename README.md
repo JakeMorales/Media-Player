@@ -225,8 +225,6 @@ Place a **32×32 PNG** at `assets/icon.png` to replace the invisible fallback ic
 ---
 
 ## Ideas / Roadmap
-
-- [ ] Particle burst on beat onset (energy-delta detection)
 - [ ] Multi-monitor support — detect all displays and span/clone
 - [ ] Electron packager (`electron-builder`) for distributable `.exe`
 - [ ] Tauri port for smaller binary footprint
