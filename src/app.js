@@ -156,7 +156,12 @@ const visualizerController  = require('./visualizer-controller');
 
     // Audio activity → status bar + power light
     const activity = player.detectAudioActive(freqData, audioActivityState, cfg);
-    ui.setStatus(activity.active, activity.level);
+    // Treat OS playback state as a floor: if the OS reports "playing",
+    // keep the deck in ACTIVE state even if loopback audio capture is
+    // unavailable or too quiet to trip the FFT threshold.
+    const playing = player.currentMeta.playbackStatus === 'playing';
+    const effectiveActive = activity.active || playing;
+    ui.setStatus(effectiveActive, activity.level);
 
     // Record arc / tonearm motion
     if (hasAudio) {

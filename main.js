@@ -114,23 +114,66 @@ function createTray() {
   tray.setToolTip('Audio Visualizer');
 }
 
+function getAllDisplayBounds() {
+  const displays = screen.getAllDisplays();
+  console.log('[displays] all:', displays.map(d => d.bounds));
+
+  if (!displays.length) {
+    const primary = screen.getPrimaryDisplay().bounds;
+    console.log('[displays] primary only:', primary);
+    return primary;
+  }
+
+    let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const { bounds } of displays) {
+    const { x, y, width, height } = bounds;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + width);
+    maxY = Math.max(maxY, y + height);
+  }
+
+  const margin = 2;
+  const union = {
+    x: minX + margin,
+    y: minY + margin,
+    width: Math.max(0, (maxX - minX) - margin * 2),
+    height: Math.max(0, (maxY - minY) - margin * 2)
+  };
+  console.log('[displays] union bounds:', union);
+  return union;
+}
+
 function createWindow() {
-  const { bounds } = screen.getPrimaryDisplay();
+  const bounds = getAllDisplayBounds();
 
   win = new BrowserWindow({
     x: bounds.x,
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
+    useContentSize: true,
     transparent: true,
     frame: false,
     resizable: false,
     movable: false,
+    fullscreenable: false,
+    focusable: false,
     skipTaskbar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     }
+  });
+
+
+  win.once('ready-to-show', () => {
+    const b = getAllDisplayBounds();
+    win.setBounds(b);
   });
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
@@ -144,6 +187,8 @@ function createWindow() {
     });
   }
 }
+
+
 
 // Renderer signals audio is running â†’ make window fully click-through
 ipcMain.on('audio-started', () => {
@@ -217,7 +262,19 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   startMediaBroadcast();
+
+  const updateWindowBounds = () => {
+    if (!win || win.isDestroyed()) return;
+    const bounds = getAllDisplayBounds();
+    win.setBounds(bounds);
+  };
+
+  screen.on('display-added', updateWindowBounds);
+  screen.on('display-removed', updateWindowBounds);
+  screen.on('display-metrics-changed', updateWindowBounds);
 });
+
+
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
